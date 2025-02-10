@@ -2,7 +2,7 @@
  TCP/IP 기반의 실시간 대규모 메시지 처리 시스템
  포트폴리오 목적의 서버 설계 및 구현의 기본 내용 정리
 
-##기본 구성
+## 기본 구성
 ```mermaid
 graph TD
     subgraph Client;
@@ -18,8 +18,9 @@ graph TD
     end
 
     S1 -- TCP/IP Response --> C1
-- - -
-###클라이언트 접속 및 Redis 데이터 조회
+```
+---
+### 클라이언트 접속 및 Redis 데이터 조회
 ```mermaid
 sequenceDiagram
     participant Client
@@ -40,8 +41,9 @@ sequenceDiagram
         Server->>Redis: 캐시 업데이트
         Server-->>Client: DB 데이터 응답
     end
-- - -
-###메시지 큐를 이용한 브로드 캐스트 흐름
+```
+---
+### 메시지 큐를 이용한 브로드 캐스트 흐름
 ```mermaid
 sequenceDiagram
     participant Client1
@@ -55,8 +57,9 @@ sequenceDiagram
     MessageQueue-->>Server: 메시지 브로드캐스트 (Subscribe)
     Server-->>Client2: 메시지 전달
     Server-->>Client3: 메시지 전달
-- - -
-###Redis → PostgreSQL 데이터 동기화 흐름
+```
+---
+### Redis → PostgreSQL 데이터 동기화 흐름
 ```mermaid
 sequenceDiagram
     participant Scheduler
@@ -68,8 +71,9 @@ sequenceDiagram
     Scheduler->>DB: DB 저장 요청 (Batch Insert/Update)
     DB-->>Scheduler: 저장 완료 응답
     Scheduler->>Redis: 해당 캐시 데이터 삭제 (Optional)
-- - -
-###클라이언트↔서버 인증 및 보안 흐름
+```
+---
+### 클라이언트↔서버 인증 및 보안 흐름
 ```mermaid
 sequenceDiagram
     participant Client
@@ -87,8 +91,9 @@ sequenceDiagram
         DB-->>Server: 인증 실패 응답
         Server-->>Client: 로그인 실패 응답
     end
-- - -
-###비정상 세션 종료 처리 흐름
+```
+---
+### 비정상 세션 종료 처리 흐름
 ```mermaid
 sequenceDiagram
     participant Client
@@ -110,3 +115,4 @@ sequenceDiagram
             Server-->>Server: 추가 처리 필요 없음
         end
     end
+```
