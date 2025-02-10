@@ -1,0 +1,10 @@
+{
+	"client_title" : "UserClient",
+	"client_sub_title" : "UserClient",
+	"high_priority_count" : 3,
+	"normal_priority_count" : 3,
+	"low_priority_count" : 5,
+	"write_console_log" : 3,
+	"write_file_log" : 0,
+	"console_windows": false
+}

@@ -1,0 +1,28 @@
+{
+	"dependencies": [
+	  "lz4",
+	  "fmt",
+	  "cryptopp",
+	  "gtest",
+	  "libpq",
+	  "efsw",
+	  {
+		"name": "redis-plus-plus",
+		"features": [
+		  "cxx17",
+		  "tls"
+		]
+	  },
+	  "boost-algorithm",
+	  "boost-dll",
+	  "boost-asio",
+	  "boost-json",
+	  "boost-system",
+	  "boost-container",
+	  "boost-filesystem",
+	  "libplist",
+	  "boost-process"
+	],
+	  "builtin-baseline": "3508985146f1b1d248c67ead13f8f54be5b4f5da"
+  }
+  
