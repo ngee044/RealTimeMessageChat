@@ -20,6 +20,6 @@ find_package(Threads REQUIRED)
 
 add_subdirectory(.cpp_tool_kit)
 
-add_subdirectory(CommonComponent)
+add_subdirectory(CommonModule)
 add_subdirectory(MainServer)
 add_subdirectory(UserClient)
