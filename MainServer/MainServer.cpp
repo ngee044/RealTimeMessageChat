@@ -22,3 +22,12 @@ auto MainServer::wait_stop() -> std::tuple<bool, std::optional<std::string>>
 {
 	return std::tuple<bool, std::optional<std::string>>();
 }
+
+auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::string>>
+{
+	return std::tuple<bool, std::optional<std::string>>();
+}
+
+auto MainServer::destroy_thread_pool() -> void
+{
+}

@@ -55,7 +55,7 @@ auto Configurations::log_root_path() -> std::string { return log_root_path_; }
 
 auto Configurations::load() -> void
 {
-	std::filesystem::path path = root_path_ + "arp_manager_configurations.json";
+	std::filesystem::path path = root_path_ + "user_client_configurations.json";
 	if (!std::filesystem::exists(path))
 	{
 		Logger::handle().write(LogTypes::Error, fmt::format("Configurations file does not exist: {}", path.string()));
@@ -63,7 +63,7 @@ auto Configurations::load() -> void
 	}
 
 	File source;
-	source.open(fmt::format("{}arp_manager_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
+	source.open(fmt::format("{}user_client_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
 	auto [source_data, error_message] = source.read_bytes();
 	if (source_data == std::nullopt)
 	{

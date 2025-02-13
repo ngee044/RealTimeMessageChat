@@ -12,7 +12,10 @@
 
 using namespace Utilities;
 
-Network::ClientMessageParsing::ClientMessageParsing(const std::string& id, const std::string& sub_id, const std::string& message, const client_message_parsing_callback& callback)
+namespace Network
+{
+	
+ClientMessageParsing::ClientMessageParsing(const std::string& id, const std::string& sub_id, const std::string& message, const client_message_parsing_callback& callback)
 	: Job(JobPriorities::Normal, "MessageParsing")
 	, id_(id)
 	, sub_id_(sub_id)
@@ -21,11 +24,11 @@ Network::ClientMessageParsing::ClientMessageParsing(const std::string& id, const
 	save(id_);
 }
 
-Network::ClientMessageParsing::~ClientMessageParsing()
+ClientMessageParsing::~ClientMessageParsing()
 {
 }
 
-auto Network::ClientMessageParsing::working() -> std::tuple<bool, std::optional<std::string>>
+auto ClientMessageParsing::working() -> std::tuple<bool, std::optional<std::string>>
 {
 	if (callback_ == nullptr)
 	{
@@ -59,4 +62,5 @@ auto Network::ClientMessageParsing::working() -> std::tuple<bool, std::optional<
 	std::string command = message.at("message").as_string().data();
 
 	return callback_(id_, sub_id_, command, data);
+}
 }
