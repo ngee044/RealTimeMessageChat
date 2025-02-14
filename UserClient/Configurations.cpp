@@ -24,6 +24,10 @@ Configurations::Configurations(ArgumentParser&& arguments)
 	, low_priority_count_(5)
 	, write_interval_(1000)
 	, log_root_path_("")
+	, buffer_size_(1024)
+	, server_ip_("127.0.0.1")
+	, server_port_(9876)
+	, encrypt_mode_(true)
 {
 	root_path_ = arguments.program_folder();
 
@@ -52,6 +56,12 @@ auto Configurations::write_interval() -> uint16_t { return write_interval_; }
 auto Configurations::client_title() -> std::string { return client_title_; }
 
 auto Configurations::log_root_path() -> std::string { return log_root_path_; }
+
+auto Configurations::buffer_size() -> std::size_t { return buffer_size_; }
+
+auto Configurations::server_ip() -> std::string { return server_ip_; }
+
+auto Configurations::server_port() -> uint16_t { return server_port_; }
 
 auto Configurations::load() -> void
 {
@@ -121,6 +131,21 @@ auto Configurations::load() -> void
 	if (message.contains("write_interval") && message.at("write_interval").is_number())
 	{
 		write_interval_ = static_cast<int>(message.at("write_interval").as_int64());
+	}
+
+	if (message.contains("buffer_size") && message.at("buffer_size").is_number())
+	{
+		buffer_size_ = static_cast<int>(message.at("buffer_size").as_int64());
+	}
+
+	if (message.contains("main_server_ip") && message.at("main_server_ip").is_string())
+	{
+		server_ip_ = message.at("main_server_ip").as_string().data();
+	}
+
+	if (message.contains("main_server_port") && message.at("main_server_port").is_number())
+	{
+		server_port_ = static_cast<int>(message.at("main_server_port").as_int64());
 	}
 }
 

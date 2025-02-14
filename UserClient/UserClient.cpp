@@ -17,24 +17,25 @@
 #include <vector>
 #include <filesystem>
 
-
 UserClient::UserClient(std::shared_ptr<Configurations> configurations)
 	: thread_pool_(nullptr)
 	, configurations_(configurations)
+	, register_key_("MainServer")
 	, messages_()
 {
 	// title is id
 	client_ = std::make_shared<NetworkClient>(configurations->client_title(), configurations->high_priority_count(), configurations->normal_priority_count(), configurations->low_priority_count());
 
+	client_->register_key(register_key_);
 	client_->received_connection_callback(std::bind(&UserClient::received_connection, this, std::placeholders::_1, std::placeholders::_2));
 	client_->received_message_callback(std::bind(&UserClient::received_message, this, std::placeholders::_1));
 
-	// TODO
-	// messages_.insert({});
+	messages_.insert({ "test_command", std::bind(&UserClient::test_command, this, std::placeholders::_1) });
 }
 
 UserClient::~UserClient(void)
 {
+	client_->stop();
 	client_.reset();
 
 	destroy_thread_pool();
@@ -42,17 +43,29 @@ UserClient::~UserClient(void)
 
 auto UserClient::start() -> std::tuple<bool, std::optional<std::string>>
 {
-	return std::tuple<bool, std::optional<std::string>>();
+	if (!client_->start(configurations_->server_ip(), configurations_->server_port(), configurations_->buffer_size()))
+	{
+		return { false, "Failed to start client" };
+	}
+
+	auto [result, error_message] = create_thread_pool();
+	if (!result)
+	{
+		return { false, fmt::format("Failed to create thread pool: {}", error_message.value()) };
+	}
+
+	client_->wait_stop();
+
+	return { true, std::nullopt };
 }
 
-auto UserClient::stop() -> std::tuple<bool, std::optional<std::string>>
+auto UserClient::stop() -> void
 {
-	return std::tuple<bool, std::optional<std::string>>();
-}
+	// TODO
+	// validate stop function
+	client_->stop();
 
-auto UserClient::wait_stop() -> std::tuple<bool, std::optional<std::string>>
-{
-	return std::tuple<bool, std::optional<std::string>>();
+	destroy_thread_pool();
 }
 
 auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::string>>
@@ -225,4 +238,34 @@ auto UserClient::parsing_message(const std::string& command, const std::string& 
 				)
 			)
 		);
+}
+
+auto UserClient::test_command(const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+{
+	if (client_ == nullptr)
+	{
+		return { false, "client is null" };
+	}
+
+	if (thread_pool_ == nullptr)
+	{
+		return { false, "thread_pool is null" };
+	}
+
+	if (message.empty())
+	{
+		return { false, "message is empty" };
+	}
+
+	Logger::handle().write(LogTypes::Information, fmt::format("test_command: {}", message));
+
+	boost::json::object response =
+	{
+		{ "id", client_->id() },
+		{ "sub_id", client_->sub_id() },
+		{ "command", "test_command" },
+		{ "message", "Request Test Command" }
+	};
+
+	return client_->send_message(boost::json::serialize(response));
 }

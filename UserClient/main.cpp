@@ -37,8 +37,6 @@ auto main(int argc, char* argv[]) -> int
 	else
 	{
 		Logger::handle().write(LogTypes::Information, "UserClient started successfully");
-
-		client_->wait_stop();
 	}
 
 	configurations_.reset();

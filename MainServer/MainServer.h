@@ -8,6 +8,8 @@
 #include <memory>
 #include <tuple>
 #include <optional>
+#include <map>
+#include <functional>
 
 using namespace Thread;
 using namespace Network;
@@ -19,12 +21,19 @@ public:
 	~MainServer(void);
 
 	auto start() -> std::tuple<bool, std::optional<std::string>>;
-	auto stop() -> std::tuple<bool, std::optional<std::string>>;
-	auto wait_stop() -> std::tuple<bool, std::optional<std::string>>;
+	auto stop() -> void;
 
 protected:
 	auto create_thread_pool() -> std::tuple<bool, std::optional<std::string>>;
 	auto destroy_thread_pool() -> void;
+
+	auto received_connection(const std::string& id, const std::string& sub_id, const bool& condition) -> std::tuple<bool, std::optional<std::string>>;
+	auto received_message(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
+	auto send_message(const std::string& message, const std::string& id = "", const std::string& sub_id = "") -> std::tuple<bool, std::optional<std::string>>;
+	auto parsing_message(const std::string& id, const std::string& sub_id, const std::string& command, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
+
+	// message list
+	auto test_command(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
 
 private:
 	std::mutex mutex_;
@@ -33,7 +42,7 @@ private:
 	std::shared_ptr<ThreadPool> thread_pool_;
 	std::shared_ptr<Configurations> configurations_;
 
-	std::map<std::string, std::function<std::tuple<bool, std::optional<std::string>>(const std::string&)>> messages_;
+	std::string register_key_;
 
-
+	std::map<std::string, std::function<std::tuple<bool, std::optional<std::string>>(const std::string&, const std::string&, const std::string&)>> messages_;
 };

@@ -22,9 +22,8 @@ public:
 	~UserClient(void);
 
 	auto start() -> std::tuple<bool, std::optional<std::string>>;
-	auto stop() -> std::tuple<bool, std::optional<std::string>>;
-	auto wait_stop() -> std::tuple<bool, std::optional<std::string>>;	
-
+	auto stop() -> void;
+	
 protected:
 	auto create_thread_pool() -> std::tuple<bool, std::optional<std::string>>;
 	auto destroy_thread_pool() -> void;
@@ -34,12 +33,16 @@ protected:
 
 	auto parsing_message(const std::string& command, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
 
+	auto test_command(const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
+
 private:
 	std::mutex mutex_;
 
 	std::shared_ptr<NetworkClient> client_;
 	std::shared_ptr<ThreadPool> thread_pool_;
 	std::shared_ptr<Configurations> configurations_;
+
+	std::string register_key_;
 
 	std::map<std::string, std::function<std::tuple<bool, std::optional<std::string>>(const std::string&)>> messages_;
 
