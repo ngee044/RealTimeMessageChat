@@ -108,7 +108,7 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
-		thread_pool_->push(worker);
+		thread_pool_->push(worker );
 	}
 
 	for (auto i = 0; i < configurations_->low_priority_count(); i++)
@@ -174,7 +174,8 @@ auto UserClient::received_connection(const bool& condition, const bool& by_itsel
 	{
 		{ "id", client_->id() },
 		{ "sub_id", client_->sub_id() },
-		{ "message", "received connection from Server" }
+		{ "message", "received connection from Server" },
+		{ "command", "test_command" }
 	};
 	
 	return client_->send_message(boost::json::serialize(message));

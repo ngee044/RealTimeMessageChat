@@ -13,7 +13,7 @@ using namespace Utilities;
 namespace Network
 {
 ServerMessageExecute::ServerMessageExecute(const std::string& id, const std::string& message, const server_message_execute_callback& callback)
-	: Job(JobPriorities::Normal, "MessageExecute")
+	: Job(JobPriorities::Normal, Converter::to_array(message), "MessageExecute")
 	, id_(id)
 	, callback_(callback)
 {

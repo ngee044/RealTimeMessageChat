@@ -130,7 +130,7 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 	if (!result)
 	{
 		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start thread pool: {}", message.value()));
-		return { false, message };
+		return { false, message.value() };
 	}
 
 	return { true, std::nullopt };
@@ -185,6 +185,8 @@ auto MainServer::received_message(const std::string& id, const std::string& sub_
 		Logger::handle().write(LogTypes::Error, "message is empty");
 		return { false, "message is empty" };
 	}
+
+	Logger::handle().write(LogTypes::Information, fmt::format("Received message[{}, {}]: {}", id, sub_id, message));
 
 	return thread_pool_->push(
 		std::dynamic_pointer_cast<Job>(

@@ -16,7 +16,7 @@ namespace Network
 {
 	
 ClientMessageParsing::ClientMessageParsing(const std::string& id, const std::string& sub_id, const std::string& message, const client_message_parsing_callback& callback)
-	: Job(JobPriorities::Normal, "MessageParsing")
+	: Job(JobPriorities::Normal, Converter::to_array(message), "MessageParsing")
 	, id_(id)
 	, sub_id_(sub_id)
 	, callback_(callback)
@@ -38,11 +38,13 @@ auto ClientMessageParsing::working() -> std::tuple<bool, std::optional<std::stri
 
 	std::string data = Converter::to_string(get_data());
 
+	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", data));
+
 	boost::json::error_code error_code;
 	auto parsed_message = boost::json::parse(data, error_code);
 	if (error_code.failed())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", error_code.message()));
+		Logger::handle().write(LogTypes::Error, fmt::format("[ClientMessageParsing] Failed to parse message: {}", error_code.message()));
 		return { false, "Failed to parse message" };
 	}
 
@@ -52,14 +54,14 @@ auto ClientMessageParsing::working() -> std::tuple<bool, std::optional<std::stri
 		return { false, "Parsed message is not an object" };
 	}
 
-	boost::json::object message = parsed_message.as_object();
-	if (!message.contains("message") || !message.at("message").is_object())
+	boost::json::object command_object = parsed_message.as_object();
+	if (!command_object.contains("command") || !command_object.at("command").is_string())
 	{
 		Logger::handle().write(LogTypes::Error, "Parsed message does not contain message object");
 		return { false, "Parsed message does not contain message object" };
 	}
 
-	std::string command = message.at("message").as_string().data();
+	std::string command = command_object.at("command").as_string().data();
 
 	return callback_(id_, sub_id_, command, data);
 }
