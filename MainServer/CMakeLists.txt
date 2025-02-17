@@ -8,11 +8,17 @@ set(SOURCE_FILES
 	main.cpp
 	Configurations.cpp
 	MainServer.cpp
+	UserClientManager.cpp
+	DBClient.cpp
+	DBPeriodicUpdateJob.cpp
 )
 
 set (HEADER_FILES
 	Configurations.h
 	MainServer.h
+	UserClientManager.h
+	DBClient.h
+	DBPeriodicUpdateJob.h
 )
 
 project(${PROGRAM_NAME} VERSION 1.0.0.0)
