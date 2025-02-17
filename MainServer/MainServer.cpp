@@ -1,4 +1,5 @@
 #include "MainServer.h"
+#include "UserClientManager.h"
 
 #include "Logger.h"
 #include "ClientHeader.h"
@@ -13,6 +14,8 @@
 #include <vector>
 #include <filesystem>
 
+using namespace Utilities;
+
 MainServer::MainServer(std::shared_ptr<Configurations> configurations)
 	: server_(nullptr)
 	, thread_pool_(nullptr)
@@ -25,7 +28,9 @@ MainServer::MainServer(std::shared_ptr<Configurations> configurations)
 	server_->received_connection_callback(std::bind(&MainServer::received_connection, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 	server_->received_message_callback(std::bind(&MainServer::received_message, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-	messages_.insert({ "test_command", std::bind(&MainServer::test_command, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) });
+	messages_.insert({ "publish_message_queue", std::bind(&MainServer::publish_message_queue, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) });
+	messages_.insert({ "request_client_status_update", std::bind(&MainServer::request_client_status_update, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) });
+
 }
 
 MainServer::~MainServer(void)
@@ -149,8 +154,6 @@ auto MainServer::destroy_thread_pool() -> void
 
 auto MainServer::received_connection(const std::string& id, const std::string& sub_id, const bool& condition) -> std::tuple<bool, std::optional<std::string>>
 {
-	// TODO
-	// connected logic
 	if (server_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "server is null");
@@ -163,6 +166,16 @@ auto MainServer::received_connection(const std::string& id, const std::string& s
 		return { false, "thread_pool is null" };
 	}
 
+	if (condition)
+	{
+		Logger::handle().write(LogTypes::Information, fmt::format("Received connection[{}, {}]: connected", id, sub_id));
+		
+		UserClientManager::handle().add(id, sub_id);
+		return { true, std::nullopt };
+	}
+
+	Logger::handle().write(LogTypes::Information, fmt::format("Received connection[{}, {}]: disconnected", id, sub_id));
+	UserClientManager::handle().remove(id, sub_id);
 	return { true, std::nullopt };
 }
 
@@ -246,7 +259,7 @@ auto MainServer::parsing_message(const std::string& id, const std::string& sub_i
 	);
 }
 
-auto MainServer::test_command(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::publish_message_queue(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
 {
 	if (server_ == nullptr)
 	{
@@ -261,11 +274,35 @@ auto MainServer::test_command(const std::string& id, const std::string& sub_id, 
 
 	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
 
+	// TODO
+	// Publish Message Queue
+
+	return { true, std::nullopt };
+}
+
+auto MainServer::request_client_status_update(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+{
+	if (server_ == nullptr)
+	{
+		Logger::handle().write(LogTypes::Error, "server is null");
+		return { false, "server is null" };
+	}
+
+	boost::json::object received_message = boost::json::parse(message).as_object();
+
+	// TODO
+	// JSON validation
+
+	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
+
+	// TODO
+	// Update current client information in Redis
+
 	boost::json::object response_message =
 	{
-		{ "command", "test_command"},
+		{ "command", "response_client_status_update"},
 
-		{ "message", "Response message" }
+		{ "message", "..." }
 	};
 
 	return send_message(boost::json::serialize(response_message), id, sub_id);

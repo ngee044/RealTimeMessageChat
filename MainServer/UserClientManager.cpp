@@ -1,16 +1,12 @@
 #include "UserClientManager.h"
 
 #include "Logger.h"
-#include "Converter.h"
-#include "LogTypes.h"
 
 #include "fmt/format.h"
 #include "fmt/xchar.h"
 
-#include "boost/json.hpp"
-#include "boost/json/parse.hpp"
 
-#include <filesystem>
+using namespace Utilities;
 
 UserClientManager::UserClientManager()
 {
@@ -19,6 +15,38 @@ UserClientManager::UserClientManager()
 
 UserClientManager::~UserClientManager()
 {
+}
+
+auto UserClientManager::add(const std::string& id, const std::string& sub_id) -> std::tuple<bool, std::optional<std::string>>
+{
+	std::scoped_lock lock(mutex_);
+
+	auto iter = clients_.find({ id, sub_id });
+	if (iter != clients_.end())
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Client is already exist: {}, {}", id, sub_id));
+		return { false, fmt::format("Client is already exist: {}, {}", id, sub_id) };
+	}
+
+	clients_.insert({ {id, sub_id}, {"", ""} });
+
+	return { true, std::nullopt };
+}
+
+auto UserClientManager::remove(const std::string& id, const std::string& sub_id) -> std::tuple<bool, std::optional<std::string>>
+{
+	std::scoped_lock lock(mutex_);
+
+	auto iter = clients_.find({ id, sub_id });
+	if (iter == clients_.end())
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Client is not exist: {}, {}", id, sub_id));
+		return { false, fmt::format("Client is not exist: {}, {}", id, sub_id) };
+	}
+
+	clients_.erase(iter);
+
+	return { true, std::nullopt };
 }
 
 #pragma region Handle
