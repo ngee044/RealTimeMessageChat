@@ -38,13 +38,12 @@ auto ClientMessageParsing::working() -> std::tuple<bool, std::optional<std::stri
 
 	std::string data = Converter::to_string(get_data());
 
-	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", data));
-
 	boost::json::error_code error_code;
 	auto parsed_message = boost::json::parse(data, error_code);
 	if (error_code.failed())
 	{
 		Logger::handle().write(LogTypes::Error, fmt::format("[ClientMessageParsing] Failed to parse message: {}", error_code.message()));
+		Logger::handle().write(LogTypes::Error, fmt::format("input data = {}", data));
 		return { false, "Failed to parse message" };
 	}
 

@@ -41,6 +41,7 @@ auto ServerMessageParsing::working() -> std::tuple<bool, std::optional<std::stri
 	if (error_code.failed())
 	{
 		Logger::handle().write(LogTypes::Error, fmt::format("[ServerMessageParsing] Failed to parse message: {}", error_code.message()));
+		Logger::handle().write(LogTypes::Error, fmt::format("input data = {}", data));
 		return { false, "Failed to parse message" };
 	}
 
