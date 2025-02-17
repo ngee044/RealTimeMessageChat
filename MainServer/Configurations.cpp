@@ -24,6 +24,11 @@ Configurations::Configurations(ArgumentParser&& arguments)
 	, low_priority_count_(5)
 	, write_interval_(1000)
 	, log_root_path_("")
+	, server_ip_("127.0.0.1")
+	, server_port_(9876)
+	, buffer_size_(32768)
+	, encrypt_mode_(true)
+
 {
 	root_path_ = arguments.program_folder();
 
@@ -53,9 +58,15 @@ auto Configurations::client_title() -> std::string { return client_title_; }
 
 auto Configurations::log_root_path() -> std::string { return log_root_path_; }
 
+auto Configurations::buffer_size() -> std::size_t { return buffer_size_; }
+
+auto Configurations::server_ip() -> std::string { return server_ip_; }
+
+auto Configurations::server_port() -> uint16_t { return server_port_; }
+
 auto Configurations::load() -> void
 {
-	std::filesystem::path path = root_path_ + "arp_manager_configurations.json";
+	std::filesystem::path path = root_path_ + "main_server_configurations.json";
 	if (!std::filesystem::exists(path))
 	{
 		Logger::handle().write(LogTypes::Error, fmt::format("Configurations file does not exist: {}", path.string()));
@@ -63,7 +74,7 @@ auto Configurations::load() -> void
 	}
 
 	File source;
-	source.open(fmt::format("{}arp_manager_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
+	source.open(fmt::format("{}main_server_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
 	auto [source_data, error_message] = source.read_bytes();
 	if (source_data == std::nullopt)
 	{
@@ -121,6 +132,26 @@ auto Configurations::load() -> void
 	if (message.contains("write_interval") && message.at("write_interval").is_number())
 	{
 		write_interval_ = static_cast<int>(message.at("write_interval").as_int64());
+	}
+
+	if (message.contains("buffer_size") && message.at("buffer_size").is_number())
+	{
+		buffer_size_ = static_cast<int>(message.at("buffer_size").as_int64());
+	}
+
+	if (message.contains("main_server_ip") && message.at("main_server_ip").is_string())
+	{
+		server_ip_ = message.at("main_server_ip").as_string().data();
+	}
+
+	if (message.contains("main_server_port") && message.at("main_server_port").is_number())
+	{
+		server_port_ = static_cast<int>(message.at("main_server_port").as_int64());
+	}
+
+	if (message.contains("encrypt_mode") && message.at("encrypt_mode").is_bool())
+	{
+		encrypt_mode_ = message.at("encrypt_mode").as_bool();
 	}
 }
 

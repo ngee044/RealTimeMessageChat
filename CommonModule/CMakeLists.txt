@@ -27,6 +27,8 @@ set (HEADER_FILES
 	ServerMessageExecute.h
 	ServerMessageParsing.h
 	ModuleHeader.hpp
+	ServerHeader.h
+	ClientHeader.h
 )
 
 project(${LIBRARY_NAME} VERSION 1.0.0.0)

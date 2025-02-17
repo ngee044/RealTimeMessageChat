@@ -28,6 +28,11 @@ public:
 	auto client_title() -> std::string;
 	auto log_root_path() -> std::string;
 
+	auto buffer_size() -> std::size_t;
+	auto server_ip() -> std::string;
+	auto server_port() -> uint16_t;
+
+
 protected:
 	auto load() -> void;
 	auto parse(ArgumentParser& arguments) -> void;
@@ -47,4 +52,8 @@ private:
 	std::string client_title_;
 	std::string root_path_;
 	std::string log_root_path_;
+
+	std::size_t buffer_size_;
+	std::string server_ip_;
+	uint16_t server_port_;
 };

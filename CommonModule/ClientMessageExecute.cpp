@@ -13,7 +13,7 @@ namespace Network
 {
 
 ClientMessageExecute::ClientMessageExecute(const std::string& id, const std::string& sub_id, const std::string& message, const client_message_execute_callback& callback)
-	: Job(JobPriorities::Normal, "MessageExecute")
+	: Job(JobPriorities::Normal, Converter::to_array(message), "MessageExecute")
 	, id_(id)
 	, sub_id_(sub_id)
 	, callback_(callback)

@@ -15,7 +15,7 @@ using namespace Utilities;
 namespace Network
 {
 ServerMessageParsing::ServerMessageParsing(const std::string& id, const std::string& message, const server_message_parsing_callback& callback)
-	: Job(JobPriorities::Normal, "MessageParsing")
+	: Job(JobPriorities::Normal, Converter::to_array(message), "MessageParsing")
 	, id_(id)
 	, callback_(callback)
 {
@@ -40,7 +40,8 @@ auto ServerMessageParsing::working() -> std::tuple<bool, std::optional<std::stri
 	auto parsed_message = boost::json::parse(data, error_code);
 	if (error_code.failed())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", error_code.message()));
+		Logger::handle().write(LogTypes::Error, fmt::format("[ServerMessageParsing] Failed to parse message: {}", error_code.message()));
+		Logger::handle().write(LogTypes::Error, fmt::format("input data = {}", data));
 		return { false, "Failed to parse message" };
 	}
 

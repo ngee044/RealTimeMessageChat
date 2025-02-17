@@ -1,0 +1,19 @@
+cmake_minimum_required(VERSION 3.18)
+
+include(CMakeDependentOption)
+
+set(PROGRAM_NAME Sample)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
+set(CMAKE_CXX_FRAGS_DEBUG "${CAMKE_CXX_FLAGS_DEBUG} -D_DEBUG")
+
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/out")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+
+project(${PROGRAM_NAME} VERSION 1.0.0.0)
+
+add_subdirectory(ClientSample)
+add_subdirectory(ServerSample)
