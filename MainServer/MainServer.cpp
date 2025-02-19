@@ -1,5 +1,6 @@
 #include "MainServer.h"
 #include "UserClientManager.h"
+#include "DBPeriodicUpdateJob.h"
 
 #include "Logger.h"
 #include "ClientHeader.h"
@@ -259,6 +260,14 @@ auto MainServer::parsing_message(const std::string& id, const std::string& sub_i
 	);
 }
 
+auto MainServer::db_periodic_update_callback() -> std::tuple<bool, std::optional<std::string>>
+{
+	// TODO
+	// update global information in PostgreSQL
+
+	return {false, "Not implemented"};
+}
+
 auto MainServer::publish_message_queue(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
 {
 	if (server_ == nullptr)
@@ -298,12 +307,25 @@ auto MainServer::request_client_status_update(const std::string& id, const std::
 	// TODO
 	// Update current client information in Redis
 
+	// write redis
 	boost::json::object response_message =
 	{
 		{ "command", "response_client_status_update"},
 
 		{ "message", "..." }
 	};
+
+	// TODO
+	// update postgreSQL
+	// this thread is longterm job
+	thread_pool_->push(
+		std::dynamic_pointer_cast<Job>(
+			std::make_shared<DBPeriodicUpdateJob>(
+				id, sub_id, boost::json::serialize(response_message), std::bind(&MainServer::db_periodic_update_callback, this)
+			)
+		)
+	);
+
 
 	return send_message(boost::json::serialize(response_message), id, sub_id);
 }
