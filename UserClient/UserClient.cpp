@@ -30,7 +30,7 @@ UserClient::UserClient(std::shared_ptr<Configurations> configurations)
 	client_->received_connection_callback(std::bind(&UserClient::received_connection, this, std::placeholders::_1, std::placeholders::_2));
 	client_->received_message_callback(std::bind(&UserClient::received_message, this, std::placeholders::_1));
 
-	messages_.insert({ "test_command", std::bind(&UserClient::test_command, this, std::placeholders::_1) });
+	messages_.insert({ "update_user_clinet_status", std::bind(&UserClient::update_user_clinet_status, this, std::placeholders::_1) });
 }
 
 UserClient::~UserClient(void)
@@ -241,32 +241,9 @@ auto UserClient::parsing_message(const std::string& command, const std::string& 
 		);
 }
 
-auto UserClient::test_command(const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+auto UserClient::update_user_clinet_status(const std::string message) -> std::tuple<bool, std::optional<std::string>>
 {
-	if (client_ == nullptr)
-	{
-		return { false, "client is null" };
-	}
-
-	if (thread_pool_ == nullptr)
-	{
-		return { false, "thread_pool is null" };
-	}
-
-	if (message.empty())
-	{
-		return { false, "message is empty" };
-	}
-
-	Logger::handle().write(LogTypes::Information, fmt::format("test_command: {}", message));
-
-	boost::json::object response =
-	{
-		{ "id", client_->id() },
-		{ "sub_id", client_->sub_id() },
-		{ "command", "test_command" },
-		{ "message", "Request Test Command" }
-	};
-
-	return client_->send_message(boost::json::serialize(response));
+	// TODO
+	// update user status
+	return std::tuple<bool, std::optional<std::string>>();
 }

@@ -25,5 +25,8 @@ protected:
 	auto working() -> std::tuple<bool, std::optional<std::string>>;
 
 private:
-
+	std::function<std::tuple<bool, std::optional<std::string>>(void)> callback_;
+	std::string id_;
+	std::string sub_id_;
+	std::string message_;
 };

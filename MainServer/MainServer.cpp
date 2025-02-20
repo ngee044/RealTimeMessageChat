@@ -176,6 +176,7 @@ auto MainServer::received_connection(const std::string& id, const std::string& s
 	}
 
 	Logger::handle().write(LogTypes::Information, fmt::format("Received connection[{}, {}]: disconnected", id, sub_id));
+	
 	UserClientManager::handle().remove(id, sub_id);
 	return { true, std::nullopt };
 }

@@ -32,8 +32,7 @@ protected:
 	auto received_message(const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
 
 	auto parsing_message(const std::string& command, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
-
-	auto test_command(const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
+	auto update_user_clinet_status(const std::string message) -> std::tuple<bool, std::optional<std::string>>;
 
 private:
 	std::mutex mutex_;
