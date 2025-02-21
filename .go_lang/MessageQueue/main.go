@@ -16,8 +16,7 @@ func main() {
 	config.ConnectRedis("MessageQueue")
 	config.ConnectRabbitMQ("MessageQueue")
 
-	queueName := config.GetEnv("QUEUE_NAME", "Not specified
-")
+	queueName := config.GetEnv("QUEUE_NAME", "Not specified")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
