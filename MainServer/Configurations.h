@@ -35,7 +35,8 @@ public:
 	auto redis_host() -> std::string;
 	auto redis_port() -> int;
 	auto redis_ttl_sec() -> int;
-	auto redis_db_index() -> int;
+	auto redis_db_user_status_index() -> int;
+	auto redis_db_global_message_index() -> int;
 	auto use_redis() -> bool;
 	auto use_redis_tls() -> bool;
 
@@ -66,7 +67,8 @@ private:
 	std::string redis_host_;
 	int redis_port_;
 	int redis_ttl_sec_;
-	int redis_db_index_;
+	int redis_db_global_message_index_;
+	int redis_db_user_status_index_;
 	bool use_redis_;
 	bool use_redis_tls_;
 

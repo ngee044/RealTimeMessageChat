@@ -22,6 +22,7 @@
 	"redis_host": "tcp:://127.0.0.1",
 	"redis_port": 6379,
 	"redis_ttl_sec": 600,
-	"redis_db_index": 7
+	"redis_db_global_message_index": 0,
+	"redis_db_user_status_index": 1
 
 }
