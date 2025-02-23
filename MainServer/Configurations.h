@@ -32,6 +32,13 @@ public:
 	auto server_ip() -> std::string;
 	auto server_port() -> uint16_t;
 
+	auto redis_host() -> std::string;
+	auto redis_port() -> int;
+	auto redis_ttl_sec() -> int;
+	auto redis_db_index() -> int;
+	auto use_redis() -> bool;
+	auto use_redis_tls() -> bool;
+
 protected:
 	auto load() -> void;
 	auto parse(ArgumentParser& arguments) -> void;
@@ -55,4 +62,12 @@ private:
 	std::size_t buffer_size_;
 	std::string server_ip_;
 	uint16_t server_port_;
+
+	std::string redis_host_;
+	int redis_port_;
+	int redis_ttl_sec_;
+	int redis_db_index_;
+	bool use_redis_;
+	bool use_redis_tls_;
+
 };

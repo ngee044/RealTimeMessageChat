@@ -28,7 +28,13 @@ Configurations::Configurations(ArgumentParser&& arguments)
 	, server_port_(9876)
 	, buffer_size_(32768)
 	, encrypt_mode_(true)
-
+	, use_redis_(false)
+	, use_redis_tls_(false)
+	, redis_host_("127.0.0.1")
+	, redis_port_(6379)
+	, redis_ttl_sec_(3600)
+	, redis_db_global_message_index_(0)
+	, redis_db_user_status_index_(1)
 {
 	root_path_ = arguments.program_folder();
 
@@ -63,6 +69,20 @@ auto Configurations::buffer_size() -> std::size_t { return buffer_size_; }
 auto Configurations::server_ip() -> std::string { return server_ip_; }
 
 auto Configurations::server_port() -> uint16_t { return server_port_; }
+
+auto Configurations::redis_host() -> std::string { return redis_host_; }
+
+auto Configurations::redis_port() -> int { return redis_port_; }
+
+auto Configurations::redis_ttl_sec() -> int { return redis_ttl_sec_; }
+
+auto Configurations::redis_db_user_status_index() -> int { return redis_db_user_status_index_; }
+
+auto Configurations::redis_db_global_message_index() -> int { return redis_db_global_message_index_; }
+
+auto Configurations::use_redis() -> bool { return use_redis_; }
+
+auto Configurations::use_redis_tls() -> bool { return use_redis_tls_; }
 
 auto Configurations::load() -> void
 {
@@ -152,6 +172,41 @@ auto Configurations::load() -> void
 	if (message.contains("encrypt_mode") && message.at("encrypt_mode").is_bool())
 	{
 		encrypt_mode_ = message.at("encrypt_mode").as_bool();
+	}
+
+	if (message.contains("use_redis") && message.at("use_redis").is_bool())
+	{
+		use_redis_ = message.at("use_redis").as_bool();
+	}
+
+	if (message.contains("use_redis_tls") && message.at("use_redis_tls").is_bool())
+	{
+		use_redis_tls_ = message.at("use_redis_tls").as_bool();
+	}
+
+	if (message.contains("redis_host") && message.at("redis_host").is_string())
+	{
+		redis_host_ = message.at("redis_host").as_string().data();
+	}
+
+	if (message.contains("redis_port") && message.at("redis_port").is_number())
+	{
+		redis_port_ = static_cast<int>(message.at("redis_port").as_int64());
+	}
+
+	if (message.contains("redis_ttl_sec") && message.at("redis_ttl_sec").is_number())
+	{
+		redis_ttl_sec_ = static_cast<int>(message.at("redis_ttl_sec").as_int64());
+	}
+
+	if (message.contains("redis_db_global_message_index") && message.at("redis_db_global_message_index").is_number())
+	{
+		redis_db_global_message_index_ = static_cast<int>(message.at("redis_db_global_message_index").as_int64());
+	}
+
+	if (message.contains("redis_db_user_status_index") && message.at("redis_db_user_status_index").is_number())
+	{
+		redis_db_user_status_index_ = static_cast<int>(message.at("redis_db_user_status_index").as_int64());
 	}
 }
 
