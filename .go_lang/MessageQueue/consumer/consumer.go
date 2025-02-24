@@ -50,8 +50,8 @@ func StartConsumer(queueName string) {
 		for msg := range msgs {
 			log.Printf(" [x] Received: %s", string(msg.Body))
 
-			// 받은 메시지를 Redis에 저장
-			err := config.SetKey("latest_message", string(msg.Body))
+			// ttl is 300 seconds
+			err := config.SetKey("latest_message", string(msg.Body), 300)
 			if err != nil {
 				log.Printf("Failed to store message in Redis: %s", err)
 			} else {
