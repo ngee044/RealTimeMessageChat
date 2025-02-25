@@ -11,6 +11,7 @@ set(SOURCE_FILES
 	UserClientManager.cpp
 	DBClient.cpp
 	DBPeriodicUpdateJob.cpp
+	MainServerConsumeJob.cpp
 )
 
 set (HEADER_FILES
@@ -19,13 +20,14 @@ set (HEADER_FILES
 	UserClientManager.h
 	DBClient.h
 	DBPeriodicUpdateJob.h
+	MainServerConsumeJob.h
 )
 
 project(${PROGRAM_NAME} VERSION 1.0.0.0)
 
 add_executable(${PROGRAM_NAME} ${HEADER_FILES} ${SOURCE_FILES})
 
-target_link_libraries(${PROGRAM_NAME} PUBLIC CommonModule Utilities Thread Network)
+target_link_libraries(${PROGRAM_NAME} PUBLIC CommonModule Utilities Thread Network Redis RabbitMQ)
 target_include_directories(${PROGRAM_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 set(JSON_FILES

@@ -3,6 +3,8 @@
 #include "Configurations.h"
 
 #include "NetworkServer.h"
+#include "SSLOptions.h"
+#include "WorkQueueConsume.h"
 
 #include <string>
 #include <memory>
@@ -13,6 +15,7 @@
 
 using namespace Thread;
 using namespace Network;
+using namespace RabbitMQ;
 
 class MainServer
 {
