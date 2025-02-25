@@ -4,20 +4,31 @@
 
 ## 기본 구성
 ```mermaid
-graph TD
-    subgraph Client;
-        C1[Client] -- TCP/IP --> S1[Message Server];
-    end
+sequenceDiagram
+    participant Client as Client
+    participant APIServer as API Server
+    participant MQ as RabbitMQ
+    participant MainServer as Main Server
+    participant Redis as Redis
+    participant OtherClients as Other Clients
 
-    subgraph Server
-        S1[Message Server] -- JSON Message --> S2[Session Manager]
-        S2 -- Read/Write --> Cache[Redis]
-        Cache -- Periodic Sync --> DB[PostgreSQL]
-        S2 -- Publish --> MQ[Message Queue]
-        MQ -- Broadcast --> S2
-    end
+    Client->>APIServer: 1) POST /publishMessage (JSON)
+    note right of Client: 클라이언트에서 REST API 호출<br>메시지 JSON 전달
 
-    S1 -- TCP/IP Response --> C1
+    APIServer->>MQ: 2) Publish 메시지
+    note right of APIServer: API 서버가<br>RabbitMQ에 메시지 발행
+
+    MainServer->>MQ: 3) Subscribe/Consume
+    note right of MainServer: 메인 서버는<br>RabbitMQ 메시지 구독 중
+
+    MQ-->>MainServer: 4) Deliver 메시지
+    note right of MQ: 메시지를 받은<br>메인 서버
+
+    MainServer->>Redis: 5) Validation/비즈니스 로직 수행<br>필요 시 Redis 연동
+    note right of Redis: 서버와 DB 사이<br>지연 최소화를 위해 Redis 사용
+
+    MainServer->>All Clients: 6) Broadcast 메시지 (TCP)
+    note right of OtherClients: Boost 기반<br>TCP 연결로 실시간 메시지 수신
 ```
 ---
 ### 클라이언트 접속 및 Redis 데이터 조회
