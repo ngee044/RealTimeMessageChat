@@ -10,7 +10,7 @@ sequenceDiagram
     participant MQ as RabbitMQ
     participant MainServer as Main Server
     participant Redis as Redis
-    participant OtherClients as Other Clients
+    participant All Clients as All Clients
 
     Client->>APIServer: 1) POST /publishMessage (JSON)
     note right of Client: 클라이언트에서 REST API 호출<br>메시지 JSON 전달
@@ -28,7 +28,7 @@ sequenceDiagram
     note right of Redis: 서버와 DB 사이<br>지연 최소화를 위해 Redis 사용
 
     MainServer->>All Clients: 6) Broadcast 메시지 (TCP)
-    note right of OtherClients: Boost 기반<br>TCP 연결로 실시간 메시지 수신
+    note right of All Clients: Boost 기반<br>TCP 연결로 실시간 메시지 수신
 ```
 ---
 ### 클라이언트 접속 및 Redis 데이터 조회
