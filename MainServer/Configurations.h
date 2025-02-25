@@ -40,6 +40,8 @@ public:
 	auto use_redis() -> bool;
 	auto use_redis_tls() -> bool;
 
+	auto consume_queue_name() -> std::string;
+
 protected:
 	auto load() -> void;
 	auto parse(ArgumentParser& arguments) -> void;
@@ -71,5 +73,7 @@ private:
 	int redis_db_user_status_index_;
 	bool use_redis_;
 	bool use_redis_tls_;
+
+	std::string consume_queue_name_;
 
 };

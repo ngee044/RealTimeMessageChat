@@ -35,6 +35,7 @@ Configurations::Configurations(ArgumentParser&& arguments)
 	, redis_ttl_sec_(3600)
 	, redis_db_global_message_index_(0)
 	, redis_db_user_status_index_(1)
+	, consume_queue_name_("")
 {
 	root_path_ = arguments.program_folder();
 
@@ -83,6 +84,8 @@ auto Configurations::redis_db_global_message_index() -> int { return redis_db_gl
 auto Configurations::use_redis() -> bool { return use_redis_; }
 
 auto Configurations::use_redis_tls() -> bool { return use_redis_tls_; }
+
+auto Configurations::consume_queue_name() -> std::string { return consume_queue_name_ }
 
 auto Configurations::load() -> void
 {
@@ -207,6 +210,11 @@ auto Configurations::load() -> void
 	if (message.contains("redis_db_user_status_index") && message.at("redis_db_user_status_index").is_number())
 	{
 		redis_db_user_status_index_ = static_cast<int>(message.at("redis_db_user_status_index").as_int64());
+	}
+
+	if (message.contains("consume_queue_name") && message.at("consume_queue_name").is_string())
+	{
+		consume_queue_name_ = message.at("consume_queue_name").as_string().data();
 	}
 }
 

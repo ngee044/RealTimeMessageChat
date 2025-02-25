@@ -261,6 +261,11 @@ auto MainServer::parsing_message(const std::string& id, const std::string& sub_i
 	);
 }
 
+auto MainServer::consume_queue() -> std::tuple<bool, std::optional<std::string>>
+{
+	return std::tuple<bool, std::optional<std::string>>();
+}
+
 auto MainServer::db_periodic_update_callback() -> std::tuple<bool, std::optional<std::string>>
 {
 	// TODO

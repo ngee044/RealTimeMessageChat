@@ -23,6 +23,9 @@
 	"redis_port": 6379,
 	"redis_ttl_sec": 600,
 	"redis_db_global_message_index": 0,
-	"redis_db_user_status_index": 1
+	"redis_db_user_status_index": 1,
 
+	"consume_queue_name": "message_broadcast_queue",
+	
+	"empty": ""
 }
