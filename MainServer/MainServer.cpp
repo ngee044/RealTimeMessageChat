@@ -22,6 +22,7 @@ MainServer::MainServer(std::shared_ptr<Configurations> configurations)
 	, thread_pool_(nullptr)
 	, configurations_(configurations)
 	, register_key_("MainServer")
+	, redis_client_(nullptr)
 {
 	server_ = std::make_shared<NetworkServer>(configurations->client_title(), configurations->high_priority_count(), configurations->normal_priority_count(), configurations->low_priority_count());
 	
@@ -43,18 +44,50 @@ MainServer::~MainServer(void)
 
 auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 {
-	auto [result, error_message] = server_->start(configurations_->server_port(), configurations_->buffer_size());
-	if (!result)
-	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start server: {}", error_message.value()));
-		return { false, fmt::format("Failed to start server: {}", error_message.value()) };
-	}
-
-	std::tie(result, error_message) = create_thread_pool();
+	auto [result, error_message] = create_thread_pool();
 	if (!result)
 	{
 		Logger::handle().write(LogTypes::Error, fmt::format("Failed to create thread pool: {}", error_message.value()));
 		return { false, fmt::format("Failed to create thread pool: {}", error_message.value()) };
+	}
+
+	if (configurations_->use_redis())
+	{
+		TLSOptions tls_options;
+		tls_options.use_tls(configurations_->use_redis_tls());
+		tls_options.ca_cert(configurations_->ca_cert());
+		tls_options.client_cert(configurations_->client_cert());
+		tls_options.client_key(configurations_->client_key());
+
+		redis_client_ = std::make_shared<RedisClient>(configurations_->redis_host(), configurations_->redis_port(), tls_options, configurations_->redis_db_user_status_index());
+		local_redis_client_ = std::make_shared<RedisClient>(configurations_->redis_host(), configurations_->redis_port(), tls_options, configurations_->redis_db_global_message_index());
+		
+		auto [connected, connect_error] = redis_client_->connect();
+		if (!connected)
+		{
+			destroy_thread_pool();
+			redis_client_.reset();
+
+			Logger::handle().write(LogTypes::Error, fmt::format("Failed to connect redis: {}", connect_error.value()));
+			return { false, fmt::format("Failed to connect redis: {}", connect_error.value()) };
+		}
+
+		std::tie(connected, connect_error) = local_redis_client_->connect();
+		if (!connected)
+		{
+			destroy_thread_pool();
+			redis_client_.reset();
+
+			Logger::handle().write(LogTypes::Error, fmt::format("Failed to connect redis: {}", connect_error.value()));
+			return { false, fmt::format("Failed to connect redis: {}", connect_error.value()) };
+		}
+	}
+
+	std::tie(result, error_message) = server_->start(configurations_->server_port(), configurations_->buffer_size());
+	if (!result)
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start server: {}", error_message.value()));
+		return { false, fmt::format("Failed to start server: {}", error_message.value()) };
 	}
 
 	server_->wait_stop();
@@ -259,11 +292,6 @@ auto MainServer::parsing_message(const std::string& id, const std::string& sub_i
 			)
 		)
 	);
-}
-
-auto MainServer::consume_queue() -> std::tuple<bool, std::optional<std::string>>
-{
-	return std::tuple<bool, std::optional<std::string>>();
 }
 
 auto MainServer::db_periodic_update_callback() -> std::tuple<bool, std::optional<std::string>>

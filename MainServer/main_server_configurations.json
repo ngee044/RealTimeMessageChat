@@ -25,7 +25,10 @@
 	"redis_db_global_message_index": 0,
 	"redis_db_user_status_index": 1,
 
-	"consume_queue_name": "message_broadcast_queue",
-	
+	"use_ssl": false,
+	"win_ca_cert" : "",
+	"linux_ca_cert" : "",
+	"ca_cert" : "",
+
 	"empty": ""
 }

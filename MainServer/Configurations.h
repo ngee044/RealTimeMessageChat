@@ -40,6 +40,12 @@ public:
 	auto use_redis() -> bool;
 	auto use_redis_tls() -> bool;
 
+	auto use_ssl() -> bool;
+	auto ca_cert() -> std::string;
+	auto engine() -> std::string;
+	auto client_cert() -> std::string;
+	auto client_key() -> std::string;
+
 	auto consume_queue_name() -> std::string;
 
 protected:
@@ -74,6 +80,9 @@ private:
 	bool use_redis_;
 	bool use_redis_tls_;
 
-	std::string consume_queue_name_;
-
+	bool use_ssl_;
+	std::string ca_cert_;
+	std::string engine_;
+	std::string client_cert_;
+	std::string client_key_;
 };
