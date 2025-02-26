@@ -38,10 +38,11 @@ protected:
 	auto parsing_message(const std::string& id, const std::string& sub_id, const std::string& command, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
 	
 	// jobs
-	auto db_periodic_update_callback() -> std::tuple<bool, std::optional<std::string>>;
+	auto db_periodic_update_job() -> std::tuple<bool, std::optional<std::string>>;
+	auto consume_message_queue() -> std::tuple<bool, std::optional<std::string>>;
+	auto check_global_message() -> std::tuple<bool, std::optional<std::string>>;
 
 	// message list
-	auto publish_message_queue(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
 	auto request_client_status_update(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
 
 private:
@@ -57,4 +58,5 @@ private:
 	std::string register_key_;
 
 	std::map<std::string, std::function<std::tuple<bool, std::optional<std::string>>(const std::string&, const std::string&, const std::string&)>> messages_;
+	const std::string global_message_key_ = "send_global_message";
 };

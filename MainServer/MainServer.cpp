@@ -1,10 +1,12 @@
 #include "MainServer.h"
 #include "UserClientManager.h"
-#include "DBPeriodicUpdateJob.h"
 
 #include "Logger.h"
 #include "ClientHeader.h"
 #include "ThreadWorker.h"
+#include "JobPool.h"
+#include "Job.h"
+#include "JobPriorities.h"
 
 #include "fmt/format.h"
 #include "fmt/xchar.h"
@@ -30,7 +32,6 @@ MainServer::MainServer(std::shared_ptr<Configurations> configurations)
 	server_->received_connection_callback(std::bind(&MainServer::received_connection, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 	server_->received_message_callback(std::bind(&MainServer::received_message, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-	messages_.insert({ "publish_message_queue", std::bind(&MainServer::publish_message_queue, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) });
 	messages_.insert({ "request_client_status_update", std::bind(&MainServer::request_client_status_update, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) });
 }
 
@@ -69,6 +70,8 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 			Logger::handle().write(LogTypes::Error, fmt::format("Failed to connect redis: {}", connect_error.value()));
 			return { false, fmt::format("Failed to connect redis: {}", connect_error.value()) };
 		}
+
+		redis_client_->set(global_message_key_, "");
 	}
 
 	std::tie(result, error_message) = server_->start(configurations_->server_port(), configurations_->buffer_size());
@@ -76,6 +79,24 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 	{
 		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start server: {}", error_message.value()));
 		return { false, fmt::format("Failed to start server: {}", error_message.value()) };
+	}
+
+	auto [db_result, db_error] = thread_pool_->push(
+		std::make_shared<Job>(JobPriorities::Low, std::bind(&MainServer::db_periodic_update_job, this), "db_periodic_update_job"));
+
+	if (!db_result)
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start db periodic update job: {}", db_error.value()));
+		return { false, fmt::format("Failed to start db periodic update job: {}", db_error.value()) };
+	}
+
+	auto [consume_result, consume_error] = thread_pool_->push(
+			std::make_shared<Job>(JobPriorities::High, std::bind(&MainServer::check_global_message, this), "check_global_message"));
+
+	if (!consume_result)
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start consume global message job: {}", consume_error.value()));
+		return { false, fmt::format("Failed to start consume global message job: {}", consume_error.value()) };
 	}
 
 	return { true, std::nullopt };
@@ -291,33 +312,124 @@ auto MainServer::parsing_message(const std::string& id, const std::string& sub_i
 	);
 }
 
-auto MainServer::db_periodic_update_callback() -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std::string>>
 {
-	// TODO
-	// update global information in PostgreSQL
-
-	return {false, "Not implemented"};
-}
-
-auto MainServer::publish_message_queue(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
-{
-	if (server_ == nullptr)
+	if (thread_pool_ == nullptr)
 	{
-		Logger::handle().write(LogTypes::Error, "server is null");
-		return { false, "server is null" };
+		Logger::handle().write(LogTypes::Error, "thread_pool is null");
+		return { false, "thread_pool is null" };
 	}
 
-	boost::json::object received_message = boost::json::parse(message).as_object();
-
 	// TODO
-	// JSON validation
+	// get all user information from Redis
+	// update user information in DB
+	// update postgreSQL DB
+	// cli command: psql -U postgres -d testdb -c "SELECT * FROM users;"
 
-	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
+	auto job_pool = thread_pool_->job_pool();
+	if (job_pool == nullptr || job_pool->lock())
+	{
+		Logger::handle().write(LogTypes::Error, "job_pool is null");
+		return { false, "job_pool is null" };
+	}
 
-	// TODO
-	// Publish Message Queue
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	job_pool->push(
+		std::make_shared<Job>(JobPriorities::Low, std::bind(&MainServer::db_periodic_update_job, this), "db_periodic_update_job"));
 
 	return { true, std::nullopt };
+}
+
+auto MainServer::consume_message_queue() -> std::tuple<bool, std::optional<std::string>>
+{
+	if (redis_client_ == nullptr)
+	{
+		Logger::handle().write(LogTypes::Error, "redis_client is null");
+		return { false, "redis_client is null" };
+	}
+
+	auto [result, error_message] = redis_client_->get(global_message_key_);
+	if (result.empty())
+	{
+		if (error_message.has_value())
+		{
+			Logger::handle().write(LogTypes::Error, fmt::format("Failed to get global message: {}", error_message.value()));
+			return { false, fmt::format("Failed to get global message: {}", error_message.value()) };
+		}
+
+		Logger::handle().write(LogTypes::Sequence, "No global message");
+
+		return { true, std::nullopt };
+	}
+
+	auto message_value = boost::json::parse(result);
+	if (!message_value.is_object())
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", result));
+		return { false, "Failed to parse message" };
+	}
+
+	auto received_message = message_value.as_object();
+	if (!received_message.contains("id") || !received_message.at("id").is_string())
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", result));
+		return { false, "Failed to parse message" };
+	}
+
+	if (!received_message.contains("sub_id") || !received_message.at("sub_id").is_string())
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", result));
+		return { false, "Failed to parse message" };
+	}
+
+	if (!received_message.contains("message") || !received_message.at("message").is_string())
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", result));
+		return { false, "Failed to parse message" };
+	}
+
+	boost::json::object message_object =
+	{
+		{ "id", received_message.at("id").as_string().data() },
+		{ "sub_id", received_message.at("sub_id").as_string().data() },
+		
+		{ "data", received_message.at("message").as_string().data() }
+	};
+
+	boost::json::object broadcast_message = 
+	{
+		{ "command", "send_broadcast_message" },
+
+		{ "message", message_object }
+	};
+
+	redis_client_->set(global_message_key_, "");
+
+	return send_message(boost::json::serialize(broadcast_message), "", "");
+}
+
+auto MainServer::check_global_message()-> std::tuple<bool, std::optional<std::string>>
+{
+	if (thread_pool_ == nullptr)
+	{
+		Logger::handle().write(LogTypes::Error, "thread_pool is null");
+		return { false, "thread_pool is null" };
+	}
+
+	auto job_pool = thread_pool_->job_pool();
+	if (job_pool == nullptr || job_pool->lock())
+	{
+		Logger::handle().write(LogTypes::Error, "job_pool is null");
+		return { false, "job_pool is null" };
+	}
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	
+	job_pool->push(
+		std::make_shared<Job>(JobPriorities::High, std::bind(&MainServer::check_global_message, this), "check_global_message"));
+
+	return consume_message_queue();
 }
 
 auto MainServer::request_client_status_update(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
@@ -338,24 +450,16 @@ auto MainServer::request_client_status_update(const std::string& id, const std::
 	// TODO
 	// Update current client information in Redis
 
-	// write redis
-	boost::json::object response_message =
-	{
-		{ "command", "response_client_status_update"},
+	// TODO (FIXME)
+	// using redis stream
+	redis_client_->set(id + "_" + sub_id, message, configurations_->redis_ttl_sec());
 
-		{ "message", "..." }
+	boost::json::object message_object =
+	{
+		{ "message", "received connection from Server" },
+
+		{ "command", "update_user_clinet_status" }
 	};
 
-	// TODO
-	// update postgreSQL
-	// this thread is longterm job
-	thread_pool_->push(
-		std::dynamic_pointer_cast<Job>(
-			std::make_shared<DBPeriodicUpdateJob>(
-				id, sub_id, boost::json::serialize(response_message), std::bind(&MainServer::db_periodic_update_callback, this)
-			)
-		)
-	);
-
-	return send_message(boost::json::serialize(response_message), id, sub_id);
+	return send_message(boost::json::serialize(message_object), id, sub_id);
 }

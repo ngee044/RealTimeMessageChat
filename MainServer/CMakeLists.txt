@@ -10,8 +10,6 @@ set(SOURCE_FILES
 	MainServer.cpp
 	UserClientManager.cpp
 	DBClient.cpp
-	DBPeriodicUpdateJob.cpp
-	MainServerConsumeJob.cpp
 )
 
 set (HEADER_FILES
@@ -19,8 +17,6 @@ set (HEADER_FILES
 	MainServer.h
 	UserClientManager.h
 	DBClient.h
-	DBPeriodicUpdateJob.h
-	MainServerConsumeJob.h
 )
 
 project(${PROGRAM_NAME} VERSION 1.0.0.0)
