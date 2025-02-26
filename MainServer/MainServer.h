@@ -26,6 +26,7 @@ public:
 
 	auto start() -> std::tuple<bool, std::optional<std::string>>;
 	auto stop() -> void;
+	auto wait_stop() -> std::tuple<bool, std::optional<std::string>>;
 
 protected:
 	auto create_thread_pool() -> std::tuple<bool, std::optional<std::string>>;
@@ -52,7 +53,6 @@ private:
 
 	// If you use more than 3 Redis clients, manage them.
 	std::shared_ptr<RedisClient> redis_client_;
-	std::shared_ptr<RedisClient> local_redis_client_;
 
 	std::string register_key_;
 

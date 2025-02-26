@@ -23,7 +23,6 @@
 	"redis_port": 6379,
 	"redis_ttl_sec": 600,
 	"redis_db_global_message_index": 0,
-	"redis_db_user_status_index": 1,
 
 	"use_ssl": false,
 	"win_ca_cert" : "",

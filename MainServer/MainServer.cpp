@@ -32,7 +32,6 @@ MainServer::MainServer(std::shared_ptr<Configurations> configurations)
 
 	messages_.insert({ "publish_message_queue", std::bind(&MainServer::publish_message_queue, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) });
 	messages_.insert({ "request_client_status_update", std::bind(&MainServer::request_client_status_update, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) });
-
 }
 
 MainServer::~MainServer(void)
@@ -59,20 +58,9 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 		tls_options.client_cert(configurations_->client_cert());
 		tls_options.client_key(configurations_->client_key());
 
-		redis_client_ = std::make_shared<RedisClient>(configurations_->redis_host(), configurations_->redis_port(), tls_options, configurations_->redis_db_user_status_index());
-		local_redis_client_ = std::make_shared<RedisClient>(configurations_->redis_host(), configurations_->redis_port(), tls_options, configurations_->redis_db_global_message_index());
+		redis_client_ = std::make_shared<RedisClient>(configurations_->redis_host(), configurations_->redis_port(), tls_options, configurations_->redis_db_global_message_index());
 		
 		auto [connected, connect_error] = redis_client_->connect();
-		if (!connected)
-		{
-			destroy_thread_pool();
-			redis_client_.reset();
-
-			Logger::handle().write(LogTypes::Error, fmt::format("Failed to connect redis: {}", connect_error.value()));
-			return { false, fmt::format("Failed to connect redis: {}", connect_error.value()) };
-		}
-
-		std::tie(connected, connect_error) = local_redis_client_->connect();
 		if (!connected)
 		{
 			destroy_thread_pool();
