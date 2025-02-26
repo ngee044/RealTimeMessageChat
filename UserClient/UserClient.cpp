@@ -31,6 +31,7 @@ UserClient::UserClient(std::shared_ptr<Configurations> configurations)
 	client_->received_message_callback(std::bind(&UserClient::received_message, this, std::placeholders::_1));
 
 	messages_.insert({ "update_user_clinet_status", std::bind(&UserClient::update_user_clinet_status, this, std::placeholders::_1) });
+	messages_.insert({ "send_broadcast_message", std::bind(&UserClient::send_broadcast_message, this, std::placeholders::_1) });
 }
 
 UserClient::~UserClient(void)
@@ -175,7 +176,8 @@ auto UserClient::received_connection(const bool& condition, const bool& by_itsel
 		{ "id", client_->id() },
 		{ "sub_id", client_->sub_id() },
 		{ "message", "received connection from Server" },
-		{ "command", "test_command" }
+
+		{ "command", "request_client_status_update" }
 	};
 	
 	return client_->send_message(boost::json::serialize(message));
@@ -245,5 +247,34 @@ auto UserClient::update_user_clinet_status(const std::string message) -> std::tu
 {
 	// TODO
 	// update user status
-	return std::tuple<bool, std::optional<std::string>>();
+
+	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
+	
+	boost::json::object send_message =
+	{
+		{ "id", client_->id() },
+		{ "sub_id", client_->sub_id() },
+		{ "message", "received connection from Server" },
+
+		{ "command", "request_client_status_update" }
+	};
+	
+	return client_->send_message(boost::json::serialize(send_message));
+}
+
+auto UserClient::send_broadcast_message(const std::string message) -> std::tuple<bool, std::optional<std::string>>
+{
+	// TODO
+	// process broadcast message
+#if 0
+	auto message_value = boost::json::parse(message);
+
+	if (!message_value.is_object())
+	{
+		return { false, "message is not found" };
+	}
+#endif
+	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
+
+	return { true, std::nullopt };
 }
