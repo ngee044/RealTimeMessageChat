@@ -1,3 +1,4 @@
+```mermaid
 graph TD;
     subgraph Client
         A[Client 요청] -->|HTTP 요청| B[RestAPI]
@@ -24,3 +25,4 @@ graph TD;
         F[Client Polling 요청] -->|HTTP 요청| B
         B -->|Get Data| D 
     end
+```
