@@ -40,6 +40,11 @@ public:
 	auto use_redis() -> bool;
 	auto use_redis_tls() -> bool;
 
+	auto rabbit_mq_host() -> std::string;
+	auto rabbit_mq_port() -> int;
+	auto rabbit_mq_user_name() -> std::string;
+	auto rabbit_mq_password() -> std::string;
+
 	auto use_ssl() -> bool;
 	auto ca_cert() -> std::string;
 	auto engine() -> std::string;
@@ -79,6 +84,12 @@ private:
 	int redis_db_user_status_index_;
 	bool use_redis_;
 	bool use_redis_tls_;
+
+	std::string consume_queue_name_;
+	std::string rabbit_mq_host_;
+	int rabbit_mq_port_;
+	std::string rabbit_mq_user_name_;
+	std::string rabbit_mq_password_;
 
 	bool use_ssl_;
 	std::string ca_cert_;

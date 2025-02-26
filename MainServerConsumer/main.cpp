@@ -1,5 +1,5 @@
-#include "MainServer.h"
 #include "Configurations.h"
+#include "MainServerConsumer.h"
 #include "Logger.h"
 
 #include "fmt/format.h"
@@ -14,7 +14,7 @@ void deregister_signal(void);
 void signal_callback(int32_t signum);
 
 std::shared_ptr<Configurations> configurations_ = nullptr;
-std::shared_ptr<MainServer> server_ = nullptr;
+std::shared_ptr<MainServerConsumer> main_server_consumer = nullptr;
 
 auto main(int argc, char* argv[]) -> int
 {
@@ -27,9 +27,9 @@ auto main(int argc, char* argv[]) -> int
 
 	Logger::handle().start(configurations_->client_title());
 
-	server_ = std::make_shared<MainServer>(configurations_);
+	main_server_consumer = std::make_shared<MainServerConsumer>(configurations_);
 
-	auto [success, message] = server_->start();
+	auto [success, message] = main_server_consumer->start();
 	if (!success)
 	{
 		Logger::handle().write(LogTypes::Error, message.value());
@@ -37,12 +37,12 @@ auto main(int argc, char* argv[]) -> int
 	else
 	{
 		Logger::handle().write(LogTypes::Information, "MainServer started successfully");
-
-		server_->wait_stop();
+		
+		main_server_consumer->wait_stop();
 	}
 
 	configurations_.reset();
-	server_.reset();
+	main_server_consumer.reset();
 
 	return 0;
 }
@@ -71,11 +71,11 @@ void signal_callback(int32_t signum)
 {
 	deregister_signal();
 
-	if (server_ == nullptr)
+	if (main_server_consumer == nullptr)
 	{
 		return;
 	}
 
 	Logger::handle().write(LogTypes::Information, fmt::format("attempt to stop AudioCalculator from signal {}", signum));
-	server_->stop();
+	main_server_consumer->stop();
 }

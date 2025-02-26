@@ -35,12 +35,17 @@ Configurations::Configurations(ArgumentParser&& arguments)
 	, redis_ttl_sec_(3600)
 	, redis_db_global_message_index_(0)
 	, redis_db_user_status_index_(1)
+	, consume_queue_name_("")
+	, rabbit_mq_host_("127.0.0.1")
+	, rabbit_mq_port_(5672)
+	, rabbit_mq_user_name_("rabbit")
+	, rabbit_mq_password_("request_hub")
 	, use_ssl_(false)
 	, ca_cert_("")
 	, engine_("")
 	, client_cert_("")
 	, client_key_("")
-
+	
 {
 	root_path_ = arguments.program_folder();
 
@@ -90,6 +95,14 @@ auto Configurations::use_redis() -> bool { return use_redis_; }
 
 auto Configurations::use_redis_tls() -> bool { return use_redis_tls_; }
 
+auto Configurations::rabbit_mq_host() -> std::string { return rabbit_mq_host_; }
+
+auto Configurations::rabbit_mq_port() -> int { return rabbit_mq_port_; }
+
+auto Configurations::rabbit_mq_user_name() -> std::string { return rabbit_mq_user_name_; }
+
+auto Configurations::rabbit_mq_password() -> std::string { return rabbit_mq_password_; }
+
 auto Configurations::use_ssl() -> bool { return use_ssl_; }
 
 auto Configurations::ca_cert() -> std::string { return ca_cert_; }
@@ -99,6 +112,8 @@ auto Configurations::engine() -> std::string { return engine_; }
 auto Configurations::client_cert() -> std::string { return client_cert_; }
 
 auto Configurations::client_key() -> std::string { return client_key_; }
+
+auto Configurations::consume_queue_name() -> std::string { return consume_queue_name_; }
 
 auto Configurations::load() -> void
 {
@@ -225,6 +240,55 @@ auto Configurations::load() -> void
 		redis_db_user_status_index_ = static_cast<int>(message.at("redis_db_user_status_index").as_int64());
 	}
 
+	if (message.contains("rabbit_mq_host") && message.at("rabbit_mq_host").is_string())
+	{
+		rabbit_mq_host_ = message.at("rabbit_mq_host").as_string().data();
+	}
+
+	if (message.contains("rabbit_mq_port") && message.at("rabbit_mq_port").is_number())
+	{
+		rabbit_mq_port_ = static_cast<int>(message.at("rabbit_mq_port").as_int64());
+	}
+
+	if (message.contains("rabbit_mq_user_name") && message.at("rabbit_mq_user_name").is_string())
+	{
+		rabbit_mq_user_name_ = message.at("rabbit_mq_user_name").as_string().data();
+	}
+
+	if (message.contains("rabbit_mq_password") && message.at("rabbit_mq_password").is_string())
+	{
+		rabbit_mq_password_ = message.at("rabbit_mq_password").as_string().data();
+	}
+
+	if (message.contains("use_ssl") && message.at("use_ssl").is_bool())
+	{
+		use_ssl_ = message.at("use_ssl").as_bool();
+	}
+
+	if (message.contains("ca_cert") && message.at("ca_cert").is_string())
+	{
+		ca_cert_ = message.at("ca_cert").as_string().data();
+	}
+
+	if (message.contains("engine") && message.at("engine").is_string())
+	{
+		engine_ = message.at("engine").as_string().data();
+	}
+
+	if (message.contains("client_cert") && message.at("client_cert").is_string())
+	{
+		client_cert_ = message.at("client_cert").as_string().data();
+	}
+
+	if (message.contains("client_key") && message.at("client_key").is_string())
+	{
+		client_key_ = message.at("client_key").as_string().data();
+	}
+
+	if (message.contains("consume_queue_name") && message.at("consume_queue_name").is_string())
+	{
+		consume_queue_name_ = message.at("consume_queue_name").as_string().data();
+	}
 }
 
 auto Configurations::parse(ArgumentParser& arguments) -> void

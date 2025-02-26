@@ -1,7 +1,7 @@
 {
-	"server_title" : "MainServer",
-	"server_sub_title" : "MainServer",
-	"main_registered_key": "main_server",
+	"server_title" : "MainServerConsumer",
+	"server_sub_title" : "MainServerConsumer",
+	"main_registered_key": "main_server_consumer",
 	"high_priority_count" : 3,
 	"normal_priority_count" : 3,
 	"low_priority_count" : 5,
@@ -9,25 +9,25 @@
 	"write_file_log" : 0,
 	"console_windows": false,
 
-	"database_server_ip": "127.0.0.1",
-	"database_server_port": 9877,
-	"database_registered_key": "database_server",
-
-	"main_server_port": 9876,
-	"buffer_size": 32768,
-	"encrypt_mode" : true,
-
 	"use_redis_tls": false,
 	"use_redis": false,
 	"redis_host": "tcp:://127.0.0.1",
 	"redis_port": 6379,
 	"redis_ttl_sec": 600,
 	"redis_db_global_message_index": 0,
+	"redis_db_user_status_index": 1,
 
 	"use_ssl": false,
 	"win_ca_cert" : "",
 	"linux_ca_cert" : "",
 	"ca_cert" : "",
 
+	"rabbit_mq_host": "localhost",
+	"rabbit_mq_port": 5672,
+	"rabbit_mq_user_name": "main_server",
+	"rabbit_mq_password": "",
+
+	"consume_queue_name": "message_broadcast_queue",
+	
 	"empty": ""
 }
