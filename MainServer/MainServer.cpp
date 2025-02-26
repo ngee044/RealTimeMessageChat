@@ -90,8 +90,6 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 		return { false, fmt::format("Failed to start server: {}", error_message.value()) };
 	}
 
-	server_->wait_stop();
-
 	return { true, std::nullopt };
 }
 
@@ -105,6 +103,17 @@ auto MainServer::stop() -> void
 
 	server_->stop();
 	server_.reset();
+}
+
+auto MainServer::wait_stop() -> std::tuple<bool, std::optional<std::string>>
+{
+	if (server_ == nullptr)
+	{
+		Logger::handle().write(LogTypes::Error, "server is null");
+		return { false, "server is null" };
+	}
+
+	return server_->wait_stop();
 }
 
 auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::string>>

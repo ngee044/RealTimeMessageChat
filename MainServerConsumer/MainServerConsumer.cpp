@@ -206,7 +206,14 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 
 	if (work_queue_consume_ == nullptr)
 	{
+		Logger::handle().write(LogTypes::Error, "work_queue_consume is null");
 		return { false, "work_queue_consume is null" };
+	}
+
+	if (redis_client_ == nullptr)
+	{
+		Logger::handle().write(LogTypes::Error, "redis_client is null");
+		return { false, "redis_client is null" };
 	}
 
 	auto [declred_name, error] = work_queue_consume_->channel_open(work_queue_channel_id_, configurations_->consume_queue_name());

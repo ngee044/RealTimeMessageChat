@@ -37,6 +37,8 @@ auto main(int argc, char* argv[]) -> int
 	else
 	{
 		Logger::handle().write(LogTypes::Information, "MainServer started successfully");
+
+		server_->wait_stop();
 	}
 
 	configurations_.reset();
