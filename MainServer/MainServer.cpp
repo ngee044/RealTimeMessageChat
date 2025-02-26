@@ -357,6 +357,5 @@ auto MainServer::request_client_status_update(const std::string& id, const std::
 		)
 	);
 
-
 	return send_message(boost::json::serialize(response_message), id, sub_id);
 }

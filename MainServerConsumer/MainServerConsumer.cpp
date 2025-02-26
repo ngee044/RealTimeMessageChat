@@ -7,6 +7,9 @@
 #include "fmt/xchar.h"
 #include "fmt/format.h"
 
+#include "boost/json.hpp"
+#include "boost/json/parse.hpp"
+
 #include <filesystem>
 #include <iostream>
 
@@ -194,6 +197,19 @@ auto MainServerConsumer::wait_stop() -> std::tuple<bool, std::optional<std::stri
 
 auto MainServerConsumer::stop() -> void
 {
+	if (work_queue_consume_ != nullptr)
+	{
+		work_queue_consume_->stop();
+		work_queue_consume_.reset();
+	}
+
+	destroy_thread_pool();
+
+	if (redis_client_ != nullptr)
+	{
+		redis_client_->disconnect();
+		redis_client_.reset();
+	}
 }
 
 auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::string>>
@@ -228,8 +244,35 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 	auto [consume_start, consume_error] = work_queue_consume_->register_consume(work_queue_channel_id_, configurations_->consume_queue_name(), 
 		[&](const std::string& queue_name, const std::string& message, const std::string& message_type)-> std::tuple<bool, std::optional<std::string>>
 		{
-			// TODO
-			// consume event logic
+			const std::string key = "message_broadcast";
+
+			auto message_value = boost::json::parse(message);
+			if (!message_value.is_object())
+			{
+				Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", message));
+				return { false, "Failed to parse message" };
+			}
+
+			auto received_message = message_value.as_object();
+			if (!received_message.contains("id") || !received_message.at("id").is_string())
+			{
+				Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", message));
+				return { false, "Failed to parse message" };
+			}
+
+			if (!received_message.contains("sub_id") || !received_message.at("sub_id").is_string())
+			{
+				Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", message));
+				return { false, "Failed to parse message" };
+			}
+
+			if (!received_message.contains("message") || !received_message.at("message").is_string())
+			{
+				Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", message));
+				return { false, "Failed to parse message" };
+			}
+
+			redis_client_->set(key, message);
 
 			return { true, std::nullopt };
 		});
