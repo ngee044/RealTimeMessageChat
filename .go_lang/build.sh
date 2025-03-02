@@ -28,4 +28,13 @@ echo "Building MessageQueue..."
 go build ./... || { echo "Error: Failed to build MessageQueue"; exit 1; }
 cd ..
 
+# DBClient 빌드
+echo "Setting up Common module in DBClient..."
+cd db_cli || { echo "Error: Cannot access DBClient directory"; exit 1; }
+go mod edit -replace Common=../Common
+go mod tidy
+echo "Building DBClient..."
+go build ./... || { echo "Error: Failed to build DBClient"; exit 1; }
+cd ..
+
 echo "Build process completed successfully!"
