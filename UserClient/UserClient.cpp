@@ -62,8 +62,6 @@ auto UserClient::start() -> std::tuple<bool, std::optional<std::string>>
 
 auto UserClient::stop() -> void
 {
-	// TODO
-	// validate stop function
 	client_->stop();
 
 	destroy_thread_pool();
@@ -245,9 +243,6 @@ auto UserClient::parsing_message(const std::string& command, const std::string& 
 
 auto UserClient::update_user_clinet_status(const std::string message) -> std::tuple<bool, std::optional<std::string>>
 {
-	// TODO
-	// update user status
-
 	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
 	
 	boost::json::object send_message =
@@ -264,17 +259,7 @@ auto UserClient::update_user_clinet_status(const std::string message) -> std::tu
 
 auto UserClient::send_broadcast_message(const std::string message) -> std::tuple<bool, std::optional<std::string>>
 {
-	// TODO
-	// process broadcast message
-#if 0
-	auto message_value = boost::json::parse(message);
-
-	if (!message_value.is_object())
-	{
-		return { false, "message is not found" };
-	}
-#endif
-	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
+	Logger::handle().write(LogTypes::Information, fmt::format("Received broadcast message: {}", message));
 
 	return { true, std::nullopt };
 }

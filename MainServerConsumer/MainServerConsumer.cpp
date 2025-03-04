@@ -135,8 +135,6 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 		return { false, fmt::format("Failed to start work queue consume: {}", error_message.value()) };
 	}
 
-	// TODO
-	// heartbeat set configuration
 	std::tie(result, error_message) = work_queue_consume_->connect(60);
 	if (!result)
 	{
@@ -244,8 +242,6 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 	auto [consume_start, consume_error] = work_queue_consume_->register_consume(work_queue_channel_id_, configurations_->consume_queue_name(), 
 		[&](const std::string& queue_name, const std::string& message, const std::string& message_type)-> std::tuple<bool, std::optional<std::string>>
 		{
-			const std::string key = "message_broadcast";
-
 			auto message_value = boost::json::parse(message);
 			if (!message_value.is_object())
 			{
@@ -272,7 +268,7 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 				return { false, "Failed to parse message" };
 			}
 
-			redis_client_->set(key, message);
+			redis_client_->set(configurations_->global_message_key(), message);
 
 			return { true, std::nullopt };
 		});

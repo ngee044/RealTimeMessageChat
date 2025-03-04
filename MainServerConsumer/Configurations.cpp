@@ -35,6 +35,7 @@ Configurations::Configurations(ArgumentParser&& arguments)
 	, redis_ttl_sec_(3600)
 	, redis_db_global_message_index_(0)
 	, redis_db_user_status_index_(1)
+	, global_message_key_("send_global_message")
 	, consume_queue_name_("")
 	, rabbit_mq_host_("127.0.0.1")
 	, rabbit_mq_port_(5672)
@@ -94,6 +95,8 @@ auto Configurations::redis_db_global_message_index() -> int { return redis_db_gl
 auto Configurations::use_redis() -> bool { return use_redis_; }
 
 auto Configurations::use_redis_tls() -> bool { return use_redis_tls_; }
+
+auto Configurations::global_message_key() -> std::string { return global_message_key_; }
 
 auto Configurations::rabbit_mq_host() -> std::string { return rabbit_mq_host_; }
 
@@ -240,6 +243,11 @@ auto Configurations::load() -> void
 		redis_db_user_status_index_ = static_cast<int>(message.at("redis_db_user_status_index").as_int64());
 	}
 
+	if (message.contains("global_message_key") && message.at("global_message_key").is_string())
+	{
+		global_message_key_ = message.at("global_message_key").as_string().data();
+	}
+
 	if (message.contains("rabbit_mq_host") && message.at("rabbit_mq_host").is_string())
 	{
 		rabbit_mq_host_ = message.at("rabbit_mq_host").as_string().data();
@@ -321,5 +329,11 @@ auto Configurations::parse(ArgumentParser& arguments) -> void
 	if (int_target != std::nullopt)
 	{
 		write_file_ = (LogTypes)int_target.value();
+	}
+
+	string_target = arguments.to_string("--consume_queue_name");
+	if (string_target != std::nullopt)
+	{
+		consume_queue_name_ = string_target.value();
 	}
 }

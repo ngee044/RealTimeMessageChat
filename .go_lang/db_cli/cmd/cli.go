@@ -1,13 +1,49 @@
 package cmd
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 
 	"db_cli/internal/user"
 )
+
+func updateMultipleFromJSON(userService *user.UserService, data []byte) {
+	type userPatch struct {
+		ID     uint   `json:"id"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+	}
+
+	var list []userPatch
+	err := json.Unmarshal(data, &list)
+	if err == nil {
+		for _, u := range list {
+			_, updateErr := userService.UpdateUser(u.ID, u.Name, u.Status)
+			if updateErr != nil {
+				log.Printf("Failed to update user (id=%d): %v\n", u.ID, updateErr)
+				continue
+			}
+			log.Printf("Updated user ID=%d => name=%s, status=%s\n", u.ID, u.Name, u.Status)
+		}
+		return
+	}
+
+	var single userPatch
+	err = json.Unmarshal(data, &single)
+	if err != nil {
+		log.Fatalf("Failed to parse JSON (as array or single object): %v\n", err)
+	}
+
+	_, updateErr := userService.UpdateUser(single.ID, single.Name, single.Status)
+	if updateErr != nil {
+		log.Fatalf("Failed to update user (id=%d): %v\n", single.ID, updateErr)
+	}
+	log.Printf("Updated single user ID=%d => name=%s, status=%s\n", single.ID, single.Name, single.Status)
+}
 
 func RunCLI(userService *user.UserService) {
 	serverCmd := flag.Bool("server", false, "Run HTTP server (Gin) for CRUD operations")
@@ -20,6 +56,9 @@ func RunCLI(userService *user.UserService) {
 	userID := flag.String("id", "", "User ID (uint)")
 	userName := flag.String("name", "", "User name")
 	userStatus := flag.String("status", "", "User status")
+
+	jsonFile := flag.String("json_file", "", "Path to JSON file containing [{id, name, status}, ...]")
+	jsonScript := flag.String("json_script", "", "JSON script containing [{id, name, status}, ...]")
 
 	flag.Parse()
 
@@ -54,6 +93,22 @@ func RunCLI(userService *user.UserService) {
 		fmt.Printf("User: %+v\n", u)
 
 	case *updateCmd:
+		if *jsonFile != "" {
+			data, err := os.ReadFile(*jsonFile)
+			if err != nil {
+				log.Fatalf("Failed to read JSON file: %v\n", err)
+			}
+
+			updateMultipleFromJSON(userService, data)
+			return
+		}
+
+		if *jsonScript != "" {
+			data := []byte(*jsonScript)
+			updateMultipleFromJSON(userService, data)
+			return
+		}
+
 		if *userID == "" || *userName == "" {
 			fmt.Println("Usage: --update --id=<USER_ID> --name=<NAME> [--status=<STATUS>]")
 			return

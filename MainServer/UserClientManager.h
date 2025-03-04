@@ -15,6 +15,7 @@ public:
 	auto add(const std::string& id, const std::string& sub_id) -> std::tuple<bool, std::optional<std::string>>;
 	auto remove(const std::string& id, const std::string& sub_id) -> std::tuple<bool, std::optional<std::string>>;
 
+	auto clinets() -> const std::map<std::tuple<std::string, std::string>, std::tuple<std::string, std::string>>&;
 private:
 	UserClientManager();
 

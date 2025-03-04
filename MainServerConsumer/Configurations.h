@@ -39,6 +39,7 @@ public:
 	auto redis_db_global_message_index() -> int;
 	auto use_redis() -> bool;
 	auto use_redis_tls() -> bool;
+	auto global_message_key() -> std::string;
 
 	auto rabbit_mq_host() -> std::string;
 	auto rabbit_mq_port() -> int;
@@ -84,6 +85,8 @@ private:
 	int redis_db_user_status_index_;
 	bool use_redis_;
 	bool use_redis_tls_;
+
+	std::string global_message_key_;
 
 	std::string consume_queue_name_;
 	std::string rabbit_mq_host_;

@@ -99,6 +99,12 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 		return { false, fmt::format("Failed to start consume global message job: {}", consume_error.value()) };
 	}
 
+#ifdef WIN32
+	system(fmt::format("MainServerConsumer --client_title {}", "MainServerConsumer").c_str());
+#else
+	system(fmt::format("./MainServerConsumer --client_title {}", "MainServerConsumer").c_str());
+#endif
+
 	return { true, std::nullopt };
 }
 
@@ -320,11 +326,26 @@ auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std:
 		return { false, "thread_pool is null" };
 	}
 
-	// TODO
-	// get all user information from Redis
-	// update user information in DB
-	// update postgreSQL DB
-	// cli command: psql -U postgres -d testdb -c "SELECT * FROM users;"
+	auto clinets = UserClientManager::handle().clinets();
+	boost::json::array user_list;
+	for (const auto& [user_id, user_status] : clinets)
+	{
+		auto [id, sub_id] = user_id;
+		auto [status, _] = user_status;
+		boost::json::object user_object =
+		{
+			{ "id", id },
+			{ "sub_id", sub_id },
+			{ "status", status }
+		};
+		user_list.push_back(user_object);
+	};
+
+#ifdef WIN32
+	system(fmt::format("db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
+#else
+	system(fmt::foramt("./db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
+#endif
 
 	auto job_pool = thread_pool_->job_pool();
 	if (job_pool == nullptr || job_pool->lock())
@@ -333,7 +354,9 @@ auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std:
 		return { false, "job_pool is null" };
 	}
 
+#ifdef _DEBUG
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+#endif
 
 	job_pool->push(
 		std::make_shared<Job>(JobPriorities::Low, std::bind(&MainServer::db_periodic_update_job, this), "db_periodic_update_job"));
@@ -349,6 +372,7 @@ auto MainServer::consume_message_queue() -> std::tuple<bool, std::optional<std::
 		return { false, "redis_client is null" };
 	}
 
+	// static redis key polling
 	auto [result, error_message] = redis_client_->get(global_message_key_);
 	if (result.empty())
 	{
@@ -442,16 +466,10 @@ auto MainServer::request_client_status_update(const std::string& id, const std::
 
 	boost::json::object received_message = boost::json::parse(message).as_object();
 
-	// TODO
 	// JSON validation
 
 	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
 
-	// TODO
-	// Update current client information in Redis
-
-	// TODO (FIXME)
-	// using redis stream
 	redis_client_->set(id + "_" + sub_id, message, configurations_->redis_ttl_sec());
 
 	boost::json::object message_object =

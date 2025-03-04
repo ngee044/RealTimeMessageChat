@@ -16,6 +16,7 @@
 	"redis_ttl_sec": 600,
 	"redis_db_global_message_index": 0,
 	"redis_db_user_status_index": 1,
+	"global_message_key": "send_global_message",
 
 	"use_ssl": false,
 	"win_ca_cert" : "",
