@@ -344,7 +344,7 @@ auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std:
 #ifdef WIN32
 	system(fmt::format("db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
 #else
-	system(fmt::foramt("./db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
+	system(fmt::format("./db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
 #endif
 
 	auto job_pool = thread_pool_->job_pool();
