@@ -184,18 +184,9 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 		return { false, fmt::format("Failed to consume queue: {}", error_message.value()) };
 	}
 
+	work_queue_consume_->start_consume();
+
 	return { true, std::nullopt };
-}
-
-auto MainServerConsumer::wait_stop() -> std::tuple<bool, std::optional<std::string>>
-{
-	if (work_queue_consume_ == nullptr)
-	{
-		Logger::handle().write(LogTypes::Error, "work_queue_consume is null");
-		return { false, "work_queue_consume is null" };
-	}
-
-	return work_queue_consume_->wait_stop();
 }
 
 auto MainServerConsumer::stop() -> void
