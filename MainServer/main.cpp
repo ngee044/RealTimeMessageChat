@@ -9,6 +9,8 @@
 #include <string>
 #include <signal.h>
 
+using namespace Utilities;
+
 void register_signal(void);
 void deregister_signal(void);
 void signal_callback(int32_t signum);
@@ -40,9 +42,11 @@ auto main(int argc, char* argv[]) -> int
 
 		server_->wait_stop();
 	}
-
-	configurations_.reset();
 	server_.reset();
+	configurations_.reset();
+
+	Logger::handle().stop();
+	Logger::destroy();
 
 	return 0;
 }

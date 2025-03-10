@@ -25,6 +25,7 @@ MainServerConsumer::MainServerConsumer(std::shared_ptr<Configurations> configura
 
 MainServerConsumer::~MainServerConsumer()
 {
+	stop();
 }
 
 auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<std::string>>
@@ -134,6 +135,7 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start work queue consume: {}", error_message.value()));
 		return { false, fmt::format("Failed to start work queue consume: {}", error_message.value()) };
 	}
+	Logger::handle().write(LogTypes::Information, "work queue consume started");
 
 	std::tie(result, error_message) = work_queue_consume_->connect(60);
 	if (!result)
@@ -141,6 +143,7 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 		Logger::handle().write(LogTypes::Error, fmt::format("Failed to connect work queue consume: {}", error_message.value()));
 		return { false, fmt::format("Failed to connect work queue consume: {}", error_message.value()) };
 	}
+	Logger::handle().write(LogTypes::Information, "work queue consume connected");
 
 	if (configurations_->use_redis())
 	{
@@ -171,6 +174,8 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 		return { false, "Redis is not used" };
 	}
 
+	Logger::handle().write(LogTypes::Information, "redis connected");
+
 	std::tie(result, error_message) = consume_queue();
 	if (!result)
 	{
@@ -184,7 +189,18 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 		return { false, fmt::format("Failed to consume queue: {}", error_message.value()) };
 	}
 
-	work_queue_consume_->start_consume();
+	return { true, std::nullopt };
+}
+
+auto MainServerConsumer::wait_stop() -> std::tuple<bool, std::optional<std::string>>
+{
+	if (work_queue_consume_ == nullptr)
+	{
+		Logger::handle().write(LogTypes::Error, "work_queue_consume is null");
+		return { false, "work_queue_consume is null" };
+	}
+
+	work_queue_consume_->wait_stop();
 
 	return { true, std::nullopt };
 }
@@ -227,17 +243,25 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 	}
 
 	auto [declred_name, error] = work_queue_consume_->channel_open(work_queue_channel_id_, configurations_->consume_queue_name());
-
-	bool success;
-	std::tie(success, error) = work_queue_consume_->prepare_consume();
-	if (!success)
+	if (!declred_name.has_value())
 	{
-		return { false, fmt::format("cannot prepare consume: {}", error.value()) };
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to open channel: {}", error.value()));
+		return { false, error };
 	}
 
-	auto [consume_start, consume_error] = work_queue_consume_->register_consume(work_queue_channel_id_, configurations_->consume_queue_name(), 
+	auto [prepare_success, prepare_error] = work_queue_consume_->prepare_consume();
+	if (!prepare_success)
+	{
+		return { false, fmt::format("cannot prepare consume: {}", prepare_error.value()) };
+	}
+
+	auto [consume_register, consume_error] = work_queue_consume_->register_consume(work_queue_channel_id_, configurations_->consume_queue_name(), 
 		[&](const std::string& queue_name, const std::string& message, const std::string& message_type)-> std::tuple<bool, std::optional<std::string>>
 		{
+			// TODO 
+			// log type: sequence
+			Logger::handle().write(LogTypes::Information, fmt::format("consume message: queue_name[{}] => {}", queue_name, message));
+
 			auto message_value = boost::json::parse(message);
 			if (!message_value.is_object())
 			{
@@ -269,10 +293,17 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 			return { true, std::nullopt };
 		});
 
-	if (!consume_start)
+	if (!consume_register)
 	{
 		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start consume: {}", consume_error.value()));
 		return { false, consume_error };
+	}
+
+	auto [consume_start, consume_start_error] = work_queue_consume_->start_consume();
+	if (!consume_start)
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start consume: {}", consume_start_error.value()));
+		return { false, consume_start_error };
 	}
 
 	return { true, std::nullopt };	

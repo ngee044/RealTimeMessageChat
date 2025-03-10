@@ -9,6 +9,8 @@
 #include <string>
 #include <signal.h>
 
+using namespace Utilities;
+
 void register_signal(void);
 void deregister_signal(void);
 void signal_callback(int32_t signum);
@@ -38,9 +40,13 @@ auto main(int argc, char* argv[]) -> int
 	{
 		Logger::handle().write(LogTypes::Information, "MainServerConsumer started successfully");
 	}
+	main_server_consumer->wait_stop();
+	main_server_consumer.reset();
 
 	configurations_.reset();
-	main_server_consumer.reset();
+
+	Logger::handle().stop();
+	Logger::destroy();
 
 	return 0;
 }

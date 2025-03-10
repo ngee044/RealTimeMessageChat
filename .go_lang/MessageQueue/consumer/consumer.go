@@ -24,7 +24,7 @@ func StartConsumer(queueName string) {
 	q, err := ch.QueueDeclare(
 		queueName,
 		true,
-		false,
+		true,
 		false,
 		false,
 		nil,

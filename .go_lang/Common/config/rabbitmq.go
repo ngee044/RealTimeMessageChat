@@ -32,7 +32,7 @@ func PublishMessage(queueName, message string) error {
 	_, err := rabbitChannel.QueueDeclare(
 		queueName,
 		true,
-		false,
+		true,
 		false,
 		false,
 		nil,
