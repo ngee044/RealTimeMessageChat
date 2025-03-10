@@ -98,13 +98,7 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start consume global message job: {}", consume_error.value()));
 		return { false, fmt::format("Failed to start consume global message job: {}", consume_error.value()) };
 	}
-
-#ifdef WIN32
-	system(fmt::format("MainServerConsumer --client_title {}", "MainServerConsumer").c_str());
-#else
-	system(fmt::format("./MainServerConsumer --client_title {}", "MainServerConsumer").c_str());
-#endif
-
+	
 	return { true, std::nullopt };
 }
 
