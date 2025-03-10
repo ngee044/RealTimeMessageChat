@@ -22,6 +22,8 @@ project(${PROJECT_NAME} VERSION 1.0.0.0)
 
 find_package(Threads REQUIRED)
 
+set(BUILD_KAFKA_LIB OFF CACHE BOOL "Build kafka library")
+
 add_subdirectory(.cpp_tool_kit)
 
 add_subdirectory(CommonModule)

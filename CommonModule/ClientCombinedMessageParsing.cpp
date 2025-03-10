@@ -47,7 +47,7 @@ auto ClientCombinedMessageParsing::working() -> std::tuple<bool, std::optional<s
 	auto message = Converter::to_string(Combiner::divide(data_array, index));
 	auto binary_data = Combiner::divide(data_array, index);
 
-	boost::json::error_code error_code;
+	boost::system::error_code error_code;
 	auto parsed_message = boost::json::parse(message, error_code);
 	if (error_code.failed())
 	{

@@ -36,7 +36,7 @@ auto ServerMessageParsing::working() -> std::tuple<bool, std::optional<std::stri
 
 	std::string data = Converter::to_string(get_data());
 
-	boost::json::error_code error_code;
+	boost::system::error_code error_code;
 	auto parsed_message = boost::json::parse(data, error_code);
 	if (error_code.failed())
 	{
