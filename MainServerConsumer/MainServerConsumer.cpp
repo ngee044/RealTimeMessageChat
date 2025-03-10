@@ -15,7 +15,7 @@
 
 using namespace Utilities;
 
-MainServerConsumer::MainServerConsumer(std::shared_ptr<Configurations> configurations)\
+MainServerConsumer::MainServerConsumer(std::shared_ptr<Configurations> configurations)
 	: configurations_(configurations)
 	, work_queue_consume_(nullptr)
 	, work_queue_channel_id_(1)
@@ -164,6 +164,11 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 			Logger::handle().write(LogTypes::Error, fmt::format("Failed to connect redis: {}", connect_error.value()));
 			return { false, fmt::format("Failed to connect redis: {}", connect_error.value()) };
 		}
+	}
+	else
+	{
+		Logger::handle().write(LogTypes::Error, "Redis is not used");
+		return { false, "Redis is not used" };
 	}
 
 	std::tie(result, error_message) = consume_queue();

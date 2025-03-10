@@ -120,7 +120,7 @@ auto Configurations::consume_queue_name() -> std::string { return consume_queue_
 
 auto Configurations::load() -> void
 {
-	std::filesystem::path path = root_path_ + "main_server_configurations.json";
+	std::filesystem::path path = root_path_ + "main_server_consumer_configurations.json";
 	if (!std::filesystem::exists(path))
 	{
 		Logger::handle().write(LogTypes::Error, fmt::format("Configurations file does not exist: {}", path.string()));
@@ -128,7 +128,7 @@ auto Configurations::load() -> void
 	}
 
 	File source;
-	source.open(fmt::format("{}main_server_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
+	source.open(fmt::format("{}main_server_consumer_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
 	auto [source_data, error_message] = source.read_bytes();
 	if (source_data == std::nullopt)
 	{
