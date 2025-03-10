@@ -344,6 +344,7 @@ auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std:
 #ifdef WIN32
 	system(fmt::format("db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
 #else
+/*
 	auto result = system(fmt::format("./db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
 
 	if (result != 0)
@@ -351,7 +352,7 @@ auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std:
 		Logger::handle().write(LogTypes::Error, fmt::format("Failed to update db: {}", result));
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
-
+*/
 #endif
 
 	auto job_pool = thread_pool_->job_pool();
