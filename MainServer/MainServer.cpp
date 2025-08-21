@@ -81,6 +81,7 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 		return { false, fmt::format("Failed to start server: {}", error_message.value()) };
 	}
 
+#if 0	
 	auto [db_result, db_error] = thread_pool_->push(
 		std::make_shared<Job>(JobPriorities::Low, std::bind(&MainServer::db_periodic_update_job, this), "db_periodic_update_job"));
 
@@ -89,6 +90,7 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start db periodic update job: {}", db_error.value()));
 		return { false, fmt::format("Failed to start db periodic update job: {}", db_error.value()) };
 	}
+#endif
 
 	auto [consume_result, consume_error] = thread_pool_->push(
 			std::make_shared<Job>(JobPriorities::High, std::bind(&MainServer::check_global_message, this), "check_global_message"));
