@@ -368,6 +368,11 @@ auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std:
 
 auto MainServer::consume_message_queue() -> std::tuple<bool, std::optional<std::string>>
 {
+	if (!configurations_->use_redis())
+	{
+		return { true, std::nullopt };
+	}
+	
 	if (redis_client_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "redis_client is null");
