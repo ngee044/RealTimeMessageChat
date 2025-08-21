@@ -9,14 +9,12 @@ set(SOURCE_FILES
 	Configurations.cpp
 	MainServer.cpp
 	UserClientManager.cpp
-	DBClient.cpp
 )
 
 set (HEADER_FILES
 	Configurations.h
 	MainServer.h
 	UserClientManager.h
-	DBClient.h
 )
 
 project(${PROGRAM_NAME} VERSION 1.0.0.0)
