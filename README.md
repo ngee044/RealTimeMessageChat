@@ -15,6 +15,19 @@
 
 이 프로젝트는 **REST API** 요청에 의해 시작된 메시지가 AMQP 메시지 큐를 거쳐, **메인 서버**에서 **검증 및 처리 후 연결된 모든 클라이언트**에게 실시간으로 전달되는 **프로토타입**이자 **기술 시연용**입니다.
 
+## Docker 사용법
+- **사전 준비**: Docker(및 Docker Compose)가 설치되어 있어야 합니다.
+- **빌드 및 실행**:
+  ```bash
+  cd docker
+  ./docker-compose.sh
+  ```
+  위 스크립트는 `docker/docker-compose.yml`을 이용해 RabbitMQ, Redis, MainServer, MainServerConsumer 컨테이너를 순차적으로 빌드·실행합니다.
+- **로그 확인/중지**:
+  - 로그: `docker compose -f docker/docker-compose.yml logs -f mainserver`
+  - 종료: `docker compose -f docker/docker-compose.yml down`
+- **진행 상황**: 도커 스크립트는 추가 지원(환경 변수/옵션화 등)을 위해 현재 보완 작업이 진행 중이며, 실행 절차가 추후 일부 변경될 수 있습니다.
+
 ## 기본 구성
 ```mermaid
 sequenceDiagram
