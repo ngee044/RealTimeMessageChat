@@ -21,6 +21,25 @@ endif()
 project(${PROJECT_NAME} VERSION 1.0.0.0)
 
 find_package(Threads REQUIRED)
+find_package(Boost REQUIRED COMPONENTS filesystem system json)
+
+# Ensure Boost imported targets exist when toolchain/config generation differs
+if(NOT TARGET Boost::filesystem)
+    find_library(BOOST_FILESYSTEM_LIB NAMES boost_filesystem PATHS "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+    if(BOOST_FILESYSTEM_LIB)
+        add_library(Boost::filesystem UNKNOWN IMPORTED)
+        set_target_properties(Boost::filesystem PROPERTIES IMPORTED_LOCATION "${BOOST_FILESYSTEM_LIB}")
+        target_include_directories(Boost::filesystem INTERFACE ${Boost_INCLUDE_DIRS})
+    endif()
+endif()
+if(NOT TARGET Boost::system)
+    find_library(BOOST_SYSTEM_LIB NAMES boost_system PATHS "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib" NO_DEFAULT_PATH)
+    if(BOOST_SYSTEM_LIB)
+        add_library(Boost::system UNKNOWN IMPORTED)
+        set_target_properties(Boost::system PROPERTIES IMPORTED_LOCATION "${BOOST_SYSTEM_LIB}")
+        target_include_directories(Boost::system INTERFACE ${Boost_INCLUDE_DIRS})
+    endif()
+endif()
 
 set(BUILD_KAFKA_LIB OFF CACHE BOOL "Build kafka library")
 
