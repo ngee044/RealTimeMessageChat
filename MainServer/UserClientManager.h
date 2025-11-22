@@ -5,6 +5,7 @@
 #include <string>
 #include <tuple>
 #include <optional>
+#include <memory>
 
 
 class UserClientManager

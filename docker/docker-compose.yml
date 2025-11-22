@@ -10,6 +10,11 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
 
   redis:
@@ -17,4 +22,45 @@ services:
     container_name: redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
+
+  mainserver:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      # Uncomment to force a specific triplet (e.g., when cross-building)
+      # args:
+      #   VCPKG_TRIPLET: arm64-linux
+    image: realtime-message-chat:latest
+    container_name: mainserver
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "9876:9876"
+    volumes:
+      - ./config/main_server_configurations.json:/opt/app/bin/main_server_configurations.json:ro
+    command: ["/opt/app/bin/MainServer"]
+    restart: unless-stopped
+
+  mainserver-consumer:
+    image: realtime-message-chat:latest
+    container_name: mainserver-consumer
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mainserver:
+        condition: service_started
+    volumes:
+      - ./config/main_server_consumer_configurations.json:/opt/app/bin/main_server_consumer_configurations.json:ro
+    command: ["/opt/app/bin/MainServerConsumer"]
+    restart: unless-stopped
