@@ -288,7 +288,10 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 				return { false, "Failed to parse message" };
 			}
 
-			redis_client_->set(configurations_->global_message_key(), message);
+			// TODO
+			// received message handle
+			// 레디스에 값을 세팅하고 
+			// redis_client_->set(configurations_->global_message_key(), message);
 
 			return { true, std::nullopt };
 		});

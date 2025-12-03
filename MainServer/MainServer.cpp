@@ -25,14 +25,16 @@ MainServer::MainServer(std::shared_ptr<Configurations> configurations)
 	, configurations_(configurations)
 	, register_key_("MainServer")
 	, redis_client_(nullptr)
+	, work_queue_emitter_(nullptr)
 {
 	server_ = std::make_shared<NetworkServer>(configurations->client_title(), configurations->high_priority_count(), configurations->normal_priority_count(), configurations->low_priority_count());
-	
+
 	server_->register_key(register_key_);
 	server_->received_connection_callback(std::bind(&MainServer::received_connection, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 	server_->received_message_callback(std::bind(&MainServer::received_message, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
 	messages_.insert({ "request_client_status_update", std::bind(&MainServer::request_client_status_update, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) });
+	messages_.insert({ "request_publish_message_queue", std::bind(&MainServer::request_publish_message_queue, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) });
 }
 
 MainServer::~MainServer(void)
@@ -72,6 +74,45 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 		}
 
 		redis_client_->set(global_message_key_, "");
+	}
+
+	// Initialize RabbitMQ Publisher
+	try
+	{
+		SSLOptions ssl_options;
+		ssl_options.use_ssl(configurations_->use_ssl());
+		ssl_options.ca_cert(configurations_->ca_cert());
+		ssl_options.client_cert(configurations_->client_cert());
+		ssl_options.client_key(configurations_->client_key());
+
+		// TODO: Add RabbitMQ configuration to Configurations class
+		std::string rabbitmq_host = "localhost";
+		int rabbitmq_port = 5672;
+		std::string rabbitmq_user = "guest";
+		std::string rabbitmq_password = "guest";
+
+		work_queue_emitter_ = std::make_shared<WorkQueueEmitter>(rabbitmq_host, rabbitmq_port, rabbitmq_user, rabbitmq_password, ssl_options);
+
+		auto [start_result, start_error] = work_queue_emitter_->start();
+		if (!start_result)
+		{
+			destroy_thread_pool();
+			redis_client_.reset();
+			work_queue_emitter_.reset();
+
+			Logger::handle().write(LogTypes::Error, fmt::format("Failed to start RabbitMQ: {}", start_error.value()));
+			return { false, fmt::format("Failed to start RabbitMQ: {}", start_error.value()) };
+		}
+
+		Logger::handle().write(LogTypes::Information, fmt::format("RabbitMQ initialized: {}:{} queue={}", rabbitmq_host, rabbitmq_port, message_queue_name_));
+	}
+	catch (const std::exception& e)
+	{
+		destroy_thread_pool();
+		redis_client_.reset();
+
+		Logger::handle().write(LogTypes::Error, fmt::format("Failed to initialize RabbitMQ: {}", e.what()));
+		return { false, fmt::format("Failed to initialize RabbitMQ: {}", e.what()) };
 	}
 
 	std::tie(result, error_message) = server_->start(configurations_->server_port(), configurations_->buffer_size());
@@ -489,4 +530,92 @@ auto MainServer::request_client_status_update(const std::string& id, const std::
 	};
 
 	return send_message(boost::json::serialize(message_object), id, sub_id);
+}
+
+auto MainServer::request_publish_message_queue(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+{
+	if (work_queue_emitter_ == nullptr)
+	{
+		Logger::handle().write(LogTypes::Error, "work_queue_emitter is null");
+		return { false, "work_queue_emitter is null" };
+	}
+
+	try
+	{
+		boost::system::error_code error_code;
+		auto parsed_message = boost::json::parse(message, error_code);
+		if (error_code.failed())
+		{
+			Logger::handle().write(LogTypes::Error, fmt::format("[request_publish_message_queue] Failed to parse message: {}", error_code.message()));
+			return { false, "Failed to parse message" };
+		}
+
+		if (!parsed_message.is_object())
+		{
+			Logger::handle().write(LogTypes::Error, "[request_publish_message_queue] Parsed message is not an object");
+			return { false, "Parsed message is not an object" };
+		}
+
+		boost::json::object message_obj = parsed_message.as_object();
+
+		if (!message_obj.contains("contents") || !message_obj.at("contents").is_object())
+		{
+			Logger::handle().write(LogTypes::Error, "[request_publish_message_queue] Message does not contain valid 'contents' field");
+			return { false, "Message does not contain valid 'contents' field" };
+		}
+
+		boost::json::object contents = message_obj.at("contents").as_object();
+
+		if (!contents.contains("message") || !contents.at("message").is_string())
+		{
+			Logger::handle().write(LogTypes::Error, "[request_publish_message_queue] Contents does not contain valid 'message' field");
+			return { false, "Contents does not contain valid 'message' field" };
+		}
+
+		std::string user_message = contents.at("message").as_string().c_str();
+
+		Logger::handle().write(LogTypes::Information, fmt::format("[request_publish_message_queue] Publishing message from client[{}, {}]: {}", id, sub_id, user_message));
+
+		boost::json::object queue_message =
+		{
+			{ "client_id", id },
+			{ "client_sub_id", sub_id },
+			{ "message", user_message },
+			{ "timestamp", std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()).count() }
+		};
+
+		std::string serialized_message = boost::json::serialize(queue_message);
+
+		// Publish to RabbitMQ
+		auto [publish_result, publish_error] = work_queue_emitter_->publish(
+			work_queue_channel_id_,
+			message_queue_name_,
+			serialized_message,
+			"application/json"
+		);
+
+		if (!publish_result)
+		{
+			Logger::handle().write(LogTypes::Error, fmt::format("[request_publish_message_queue] Failed to publish to queue: {}", publish_error.value()));
+			return { false, publish_error };
+		}
+
+		Logger::handle().write(LogTypes::Information, fmt::format("[request_publish_message_queue] Successfully published message to queue: {}", message_queue_name_));
+
+		// Send acknowledgment back to client
+		boost::json::object response =
+		{
+			{ "command", "response_publish_message_queue" },
+			{ "result", "success" },
+			{ "message", "Message published to queue successfully" }
+		};
+
+		return send_message(boost::json::serialize(response), id, sub_id);
+	}
+	catch (const std::exception& e)
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("[request_publish_message_queue] Exception: {}", e.what()));
+		return { false, fmt::format("Exception: {}", e.what()) };
+	}
 }

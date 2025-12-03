@@ -8,11 +8,13 @@ set(SOURCE_FILES
 	main.cpp
 	Configurations.cpp
 	MainServerConsumer.cpp
+	MessageCallbacks.cpp
 )
 
 set (HEADER_FILES
 	Configurations.h
 	MainServerConsumer.h
+	MessageCallbacks.h
 )
 
 project(${PROGRAM_NAME} VERSION 1.0.0.0)

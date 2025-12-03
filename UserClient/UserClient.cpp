@@ -30,6 +30,7 @@ UserClient::UserClient(std::shared_ptr<Configurations> configurations)
 	client_->received_connection_callback(std::bind(&UserClient::received_connection, this, std::placeholders::_1, std::placeholders::_2));
 	client_->received_message_callback(std::bind(&UserClient::received_message, this, std::placeholders::_1));
 
+	messages_.insert({"response_publish_message_queue", std::bind(&UserClient::response_publish_message_queue, this, std::placeholders::_1)});
 	messages_.insert({ "update_user_clinet_status", std::bind(&UserClient::update_user_clinet_status, this, std::placeholders::_1) });
 	messages_.insert({ "send_broadcast_message", std::bind(&UserClient::send_broadcast_message, this, std::placeholders::_1) });
 }
@@ -262,4 +263,57 @@ auto UserClient::send_broadcast_message(const std::string message) -> std::tuple
 	Logger::handle().write(LogTypes::Information, fmt::format("Received broadcast message: {}", message));
 
 	return { true, std::nullopt };
+}
+
+auto UserClient::response_publish_message_queue(const std::string message) -> std::tuple<bool, std::optional<std::string>>
+{
+	try
+	{
+		// Parse response message
+		boost::system::error_code error_code;
+		auto parsed_message = boost::json::parse(message, error_code);
+		if (error_code.failed())
+		{
+			Logger::handle().write(LogTypes::Error, fmt::format("[response_publish_message_queue] Failed to parse message: {}", error_code.message()));
+			return { false, "Failed to parse response message" };
+		}
+
+		if (!parsed_message.is_object())
+		{
+			Logger::handle().write(LogTypes::Error, "[response_publish_message_queue] Parsed message is not an object");
+			return { false, "Parsed message is not an object" };
+		}
+
+		boost::json::object response_obj = parsed_message.as_object();
+
+		std::string result = "unknown";
+		if (response_obj.contains("result") && response_obj.at("result").is_string())
+		{
+			result = response_obj.at("result").as_string().c_str();
+		}
+
+		std::string response_message = "";
+		if (response_obj.contains("message") && response_obj.at("message").is_string())
+		{
+			response_message = response_obj.at("message").as_string().c_str();
+		}
+
+		if (result == "success")
+		{
+			Logger::handle().write(LogTypes::Information,
+				fmt::format("[response_publish_message_queue] ✓ Success - Message published to queue successfully\n  Response: {}", response_message));
+		}
+		else
+		{
+			Logger::handle().write(LogTypes::Error,
+				fmt::format("[response_publish_message_queue] ✗ Failed - Failed to publish message to queue\n  Reason: {}", response_message));
+		}
+
+		return { true, std::nullopt };
+	}
+	catch (const std::exception& e)
+	{
+		Logger::handle().write(LogTypes::Error, fmt::format("[response_publish_message_queue] Exception: {}", e.what()));
+		return { false, fmt::format("Exception: {}", e.what()) };
+	}
 }

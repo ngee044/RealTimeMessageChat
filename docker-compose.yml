@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # Redis service
+  redis:
+    image: redis:7-alpine
+    container_name: realtimechat-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - realtimechat-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # RabbitMQ service
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: realtimechat-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - realtimechat-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MainServer service
+  mainserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: mainserver
+    container_name: realtimechat-mainserver
+    ports:
+      - "9876:9876"  # TCP/IP server port
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      SERVER_PORT: 9876
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - realtimechat-network
+    restart: unless-stopped
+
+  # MainServerConsumer service
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: consumer
+    container_name: realtimechat-consumer
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mainserver:
+        condition: service_started
+    networks:
+      - realtimechat-network
+    restart: unless-stopped
+
+networks:
+  realtimechat-network:
+    driver: bridge

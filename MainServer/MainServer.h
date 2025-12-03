@@ -5,6 +5,7 @@
 #include "NetworkServer.h"
 #include "SSLOptions.h"
 #include "RedisClient.h"
+#include "WorkQueueEmitter.h"
 
 #include <string>
 #include <memory>
@@ -44,6 +45,7 @@ protected:
 
 	// message list
 	auto request_client_status_update(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
+	auto request_publish_message_queue(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
 
 private:
 	std::mutex mutex_;
@@ -52,8 +54,11 @@ private:
 	std::shared_ptr<ThreadPool> thread_pool_;
 	std::shared_ptr<Configurations> configurations_;
 
-	// If you use more than 3 Redis clients, manage them.
 	std::shared_ptr<RedisClient> redis_client_;
+
+	std::shared_ptr<WorkQueueEmitter> work_queue_emitter_;
+	const int work_queue_channel_id_ = 1;
+	const std::string message_queue_name_ = "message_broadcast_queue";
 
 	std::string register_key_;
 

@@ -1,0 +1,44 @@
+# Simple Dockerfile using pre-built binaries
+FROM ubuntu:22.04 AS mainserver
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy pre-built binaries from local build
+COPY build/out/MainServer /app/
+COPY build/out/main_server_configurations.json /app/
+
+# Copy entrypoint script
+COPY docker/mainserver-entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+EXPOSE 9876
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["/app/MainServer"]
+
+# Runtime stage for MainServerConsumer
+FROM ubuntu:22.04 AS consumer
+
+RUN apt-get update && apt-get install -y \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy pre-built binaries from local build
+COPY build/out/MainServerConsumer /app/
+COPY build/out/main_server_consumer_configurations.json /app/
+
+# Copy entrypoint script
+COPY docker/consumer-entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["/app/MainServerConsumer"]
