@@ -4,6 +4,7 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
+    hostname: rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -16,10 +17,13 @@ services:
       timeout: 5s
       retries: 5
     restart: always
+    networks:
+      - rtmc-network
 
   redis:
     image: redis:latest
     container_name: redis
+    hostname: redis
     ports:
       - "6379:6379"
     healthcheck:
@@ -28,6 +32,8 @@ services:
       timeout: 5s
       retries: 5
     restart: always
+    networks:
+      - rtmc-network
 
   mainserver:
     build:
@@ -38,6 +44,7 @@ services:
       #   VCPKG_TRIPLET: arm64-linux
     image: realtime-message-chat:latest
     container_name: mainserver
+    hostname: mainserver
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -47,12 +54,16 @@ services:
       - "9876:9876"
     volumes:
       - ./config/main_server_configurations.json:/opt/app/bin/main_server_configurations.json:ro
+      - ./logs/mainserver:/opt/app/logs
     command: ["/opt/app/bin/MainServer"]
     restart: unless-stopped
+    networks:
+      - rtmc-network
 
   mainserver-consumer:
     image: realtime-message-chat:latest
     container_name: mainserver-consumer
+    hostname: mainserver-consumer
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -62,5 +73,12 @@ services:
         condition: service_started
     volumes:
       - ./config/main_server_consumer_configurations.json:/opt/app/bin/main_server_consumer_configurations.json:ro
+      - ./logs/consumer:/opt/app/logs
     command: ["/opt/app/bin/MainServerConsumer"]
     restart: unless-stopped
+    networks:
+      - rtmc-network
+
+networks:
+  rtmc-network:
+    driver: bridge

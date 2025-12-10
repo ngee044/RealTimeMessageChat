@@ -21,7 +21,12 @@
 	  "boost-container",
 	  "boost-filesystem",
 	  "libplist",
-	  "librabbitmq",
+	  {
+		"name": "librabbitmq",
+		"features": [
+		  "ssl"
+		]
+	  },
 	  "boost-process"
 	]
   }

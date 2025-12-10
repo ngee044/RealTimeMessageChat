@@ -1,0 +1,16 @@
+{
+  "client_title": "UserClient",
+  "client_sub_title": "UserClient",
+  "log_root_path": "./logs/",
+  "high_priority_count": 3,
+  "normal_priority_count": 3,
+  "low_priority_count": 5,
+  "write_console_log": 3,
+  "write_file_log": 0,
+  "write_interval": 1000,
+  "console_windows": false,
+  "main_server_ip": "127.0.0.1",
+  "main_server_port": 9876,
+  "buffer_size": 32768,
+  "encrypt_mode": false
+}
