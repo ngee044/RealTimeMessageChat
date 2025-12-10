@@ -1,7 +1,6 @@
 {
 	"dependencies": [
 	  "lz4",
-	  "fmt",
 	  "cryptopp",
 	  "gtest",
 	  "libpq",
@@ -21,12 +20,7 @@
 	  "boost-container",
 	  "boost-filesystem",
 	  "libplist",
-	  {
-		"name": "librabbitmq",
-		"features": [
-		  "ssl"
-		]
-	  },
+	  "librabbitmq",
 	  "boost-process"
 	]
   }

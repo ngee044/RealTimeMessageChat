@@ -4,8 +4,7 @@
 #include "Logger.h"
 #include "Converter.h"
 
-#include "fmt/xchar.h"
-#include "fmt/format.h"
+#include <format>
 
 #include "boost/json.hpp"
 #include "boost/json/parse.hpp"
@@ -68,12 +67,12 @@ auto Configurations::load() -> void
 	std::filesystem::path path = root_path_ + "user_client_configurations.json";
 	if (!std::filesystem::exists(path))
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Configurations file does not exist: {}", path.string()));
+		Logger::handle().write(LogTypes::Error, std::format("Configurations file does not exist: {}", path.string()));
 		return;
 	}
 
 	File source;
-	source.open(fmt::format("{}user_client_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
+	source.open(std::format("{}user_client_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
 	auto [source_data, error_message] = source.read_bytes();
 	if (source_data == std::nullopt)
 	{

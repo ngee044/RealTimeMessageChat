@@ -8,8 +8,7 @@
 #include "Job.h"
 #include "JobPriorities.h"
 
-#include "fmt/format.h"
-#include "fmt/xchar.h"
+#include <format>
 
 #include "boost/json.hpp"
 #include "boost/json/parse.hpp"
@@ -47,8 +46,8 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 	auto [result, error_message] = create_thread_pool();
 	if (!result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to create thread pool: {}", error_message.value()));
-		return { false, fmt::format("Failed to create thread pool: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to create thread pool: {}", error_message.value()));
+		return { false, std::format("Failed to create thread pool: {}", error_message.value()) };
 	}
 
 	if (configurations_->use_redis())
@@ -67,8 +66,8 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 			destroy_thread_pool();
 			redis_client_.reset();
 
-			Logger::handle().write(LogTypes::Error, fmt::format("Failed to connect redis: {}", connect_error.value()));
-			return { false, fmt::format("Failed to connect redis: {}", connect_error.value()) };
+			Logger::handle().write(LogTypes::Error, std::format("Failed to connect redis: {}", connect_error.value()));
+			return { false, std::format("Failed to connect redis: {}", connect_error.value()) };
 		}
 
 		redis_client_->set(global_message_key_, "");
@@ -77,8 +76,8 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 	std::tie(result, error_message) = server_->start(configurations_->server_port(), configurations_->buffer_size());
 	if (!result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start server: {}", error_message.value()));
-		return { false, fmt::format("Failed to start server: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start server: {}", error_message.value()));
+		return { false, std::format("Failed to start server: {}", error_message.value()) };
 	}
 
 #if 0	
@@ -87,8 +86,8 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 
 	if (!db_result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start db periodic update job: {}", db_error.value()));
-		return { false, fmt::format("Failed to start db periodic update job: {}", db_error.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start db periodic update job: {}", db_error.value()));
+		return { false, std::format("Failed to start db periodic update job: {}", db_error.value()) };
 	}
 #endif
 
@@ -97,8 +96,8 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 
 	if (!consume_result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start consume global message job: {}", consume_error.value()));
-		return { false, fmt::format("Failed to start consume global message job: {}", consume_error.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start consume global message job: {}", consume_error.value()));
+		return { false, std::format("Failed to start consume global message job: {}", consume_error.value()) };
 	}
 	
 	return { true, std::nullopt };
@@ -137,7 +136,7 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 	}
 	catch(const std::bad_alloc& e)
 	{
-		return { false, fmt::format("Memory allocation failed to ThreadPool: {}", e.what()) };
+		return { false, std::format("Memory allocation failed to ThreadPool: {}", e.what()) };
 	}
 	
 	for (auto i = 0; i < configurations_->high_priority_count(); i++)
@@ -149,7 +148,7 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
 		thread_pool_->push(worker);
@@ -164,7 +163,7 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
 		thread_pool_->push(worker);
@@ -179,7 +178,7 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
 		thread_pool_->push(worker);
@@ -188,7 +187,7 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 	auto [result, message] = thread_pool_->start();
 	if (!result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start thread pool: {}", message.value()));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start thread pool: {}", message.value()));
 		return { false, message.value() };
 	}
 
@@ -222,13 +221,13 @@ auto MainServer::received_connection(const std::string& id, const std::string& s
 
 	if (condition)
 	{
-		Logger::handle().write(LogTypes::Information, fmt::format("Received connection[{}, {}]: connected", id, sub_id));
+		Logger::handle().write(LogTypes::Information, std::format("Received connection[{}, {}]: connected", id, sub_id));
 		
 		UserClientManager::handle().add(id, sub_id);
 		return { true, std::nullopt };
 	}
 
-	Logger::handle().write(LogTypes::Information, fmt::format("Received connection[{}, {}]: disconnected", id, sub_id));
+	Logger::handle().write(LogTypes::Information, std::format("Received connection[{}, {}]: disconnected", id, sub_id));
 	
 	UserClientManager::handle().remove(id, sub_id);
 	return { true, std::nullopt };
@@ -254,7 +253,7 @@ auto MainServer::received_message(const std::string& id, const std::string& sub_
 		return { false, "message is empty" };
 	}
 
-	Logger::handle().write(LogTypes::Information, fmt::format("Received message[{}, {}]: {}", id, sub_id, message));
+	Logger::handle().write(LogTypes::Information, std::format("Received message[{}, {}]: {}", id, sub_id, message));
 
 	return thread_pool_->push(
 		std::dynamic_pointer_cast<Job>(
@@ -273,7 +272,7 @@ auto MainServer::send_message(const std::string& message, const std::string& id,
 		return { false, "server is null" };
 	}
 
-	Logger::handle().write(LogTypes::Information, fmt::format("Send message[{}, {}]: {}", id, sub_id, message));
+	Logger::handle().write(LogTypes::Information, std::format("Send message[{}, {}]: {}", id, sub_id, message));
 
 	return server_->send_message(message, id, sub_id);
 }
@@ -301,7 +300,7 @@ auto MainServer::parsing_message(const std::string& id, const std::string& sub_i
 	auto iter = messages_.find(command);
 	if (iter == messages_.end())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("command is not found: {}", command));
+		Logger::handle().write(LogTypes::Error, std::format("command is not found: {}", command));
 		return { false, "command is not found" };
 	}
 
@@ -338,14 +337,14 @@ auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std:
 	};
 
 #ifdef WIN32
-	system(fmt::format("db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
+	system(std::format("db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
 #else
 /*
-	auto result = system(fmt::format("./db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
+	auto result = system(std::format("./db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
 
 	if (result != 0)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to update db: {}", result));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to update db: {}", result));
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
 */
@@ -387,8 +386,8 @@ auto MainServer::consume_message_queue() -> std::tuple<bool, std::optional<std::
 	{
 		if (error_message.has_value())
 		{
-			Logger::handle().write(LogTypes::Error, fmt::format("Failed to get global message: {}", error_message.value()));
-			return { false, fmt::format("Failed to get global message: {}", error_message.value()) };
+			Logger::handle().write(LogTypes::Error, std::format("Failed to get global message: {}", error_message.value()));
+			return { false, std::format("Failed to get global message: {}", error_message.value()) };
 		}
 
 		Logger::handle().write(LogTypes::Sequence, "No global message");
@@ -399,26 +398,26 @@ auto MainServer::consume_message_queue() -> std::tuple<bool, std::optional<std::
 	auto message_value = boost::json::parse(result);
 	if (!message_value.is_object())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", result));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", result));
 		return { false, "Failed to parse message" };
 	}
 
 	auto received_message = message_value.as_object();
 	if (!received_message.contains("id") || !received_message.at("id").is_string())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", result));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", result));
 		return { false, "Failed to parse message" };
 	}
 
 	if (!received_message.contains("sub_id") || !received_message.at("sub_id").is_string())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", result));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", result));
 		return { false, "Failed to parse message" };
 	}
 
 	if (!received_message.contains("message") || !received_message.at("message").is_string())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", result));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", result));
 		return { false, "Failed to parse message" };
 	}
 
@@ -477,7 +476,7 @@ auto MainServer::request_client_status_update(const std::string& id, const std::
 
 	// JSON validation
 
-	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
+	Logger::handle().write(LogTypes::Information, std::format("Received message: {}", message));
 
 	redis_client_->set(id + "_" + sub_id, message, configurations_->redis_ttl_sec());
 

@@ -4,8 +4,7 @@
 #include "Converter.h"
 #include "ThreadWorker.h"
 
-#include "fmt/xchar.h"
-#include "fmt/format.h"
+#include <format>
 
 #include "boost/json.hpp"
 #include "boost/json/parse.hpp"
@@ -38,7 +37,7 @@ auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<
 	}
 	catch(const std::bad_alloc& e)
 	{
-		return { false, fmt::format("Memory allocation failed to ThreadPool: {}", e.what()) };
+		return { false, std::format("Memory allocation failed to ThreadPool: {}", e.what()) };
 	}
 	
 	for (auto i = 0; i < configurations_->high_priority_count(); i++)
@@ -50,7 +49,7 @@ auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
 		thread_pool_->push(worker);
@@ -65,7 +64,7 @@ auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
 		thread_pool_->push(worker);
@@ -80,7 +79,7 @@ auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
 		thread_pool_->push(worker);
@@ -89,7 +88,7 @@ auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<
 	auto [result, message] = thread_pool_->start();
 	if (!result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start thread pool: {}", message.value()));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start thread pool: {}", message.value()));
 		return { false, message.value() };
 	}
 
@@ -113,8 +112,8 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 	auto [result, error_message] = create_thread_pool();
 	if (!result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to create thread pool: {}", error_message.value()));
-		return { false, fmt::format("Failed to create thread pool: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to create thread pool: {}", error_message.value()));
+		return { false, std::format("Failed to create thread pool: {}", error_message.value()) };
 	}
 
 	SSLOptions ssl_options;
@@ -132,16 +131,16 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 	std::tie(result, error_message) = work_queue_consume_->start();
 	if (!result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start work queue consume: {}", error_message.value()));
-		return { false, fmt::format("Failed to start work queue consume: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start work queue consume: {}", error_message.value()));
+		return { false, std::format("Failed to start work queue consume: {}", error_message.value()) };
 	}
 	Logger::handle().write(LogTypes::Information, "work queue consume started");
 
 	std::tie(result, error_message) = work_queue_consume_->connect(60);
 	if (!result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to connect work queue consume: {}", error_message.value()));
-		return { false, fmt::format("Failed to connect work queue consume: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to connect work queue consume: {}", error_message.value()));
+		return { false, std::format("Failed to connect work queue consume: {}", error_message.value()) };
 	}
 	Logger::handle().write(LogTypes::Information, "work queue consume connected");
 
@@ -164,8 +163,8 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 
 			redis_client_.reset();
 
-			Logger::handle().write(LogTypes::Error, fmt::format("Failed to connect redis: {}", connect_error.value()));
-			return { false, fmt::format("Failed to connect redis: {}", connect_error.value()) };
+			Logger::handle().write(LogTypes::Error, std::format("Failed to connect redis: {}", connect_error.value()));
+			return { false, std::format("Failed to connect redis: {}", connect_error.value()) };
 		}
 	}
 	else
@@ -185,8 +184,8 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 
 		redis_client_.reset();
 
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to consume queue: {}", error_message.value()));
-		return { false, fmt::format("Failed to consume queue: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to consume queue: {}", error_message.value()));
+		return { false, std::format("Failed to consume queue: {}", error_message.value()) };
 	}
 
 	return { true, std::nullopt };
@@ -245,14 +244,14 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 	auto [declred_name, error] = work_queue_consume_->channel_open(work_queue_channel_id_, configurations_->consume_queue_name());
 	if (!declred_name.has_value())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to open channel: {}", error.value()));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to open channel: {}", error.value()));
 		return { false, error };
 	}
 
 	auto [prepare_success, prepare_error] = work_queue_consume_->prepare_consume();
 	if (!prepare_success)
 	{
-		return { false, fmt::format("cannot prepare consume: {}", prepare_error.value()) };
+		return { false, std::format("cannot prepare consume: {}", prepare_error.value()) };
 	}
 
 	auto [consume_register, consume_error] = work_queue_consume_->register_consume(work_queue_channel_id_, configurations_->consume_queue_name(), 
@@ -260,31 +259,31 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 		{
 			// TODO 
 			// log type: sequence
-			Logger::handle().write(LogTypes::Information, fmt::format("consume message: queue_name[{}] => {}", queue_name, message));
+			Logger::handle().write(LogTypes::Information, std::format("consume message: queue_name[{}] => {}", queue_name, message));
 
 			auto message_value = boost::json::parse(message);
 			if (!message_value.is_object())
 			{
-				Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", message));
+				Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
 				return { false, "Failed to parse message" };
 			}
 
 			auto received_message = message_value.as_object();
 			if (!received_message.contains("id") || !received_message.at("id").is_string())
 			{
-				Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", message));
+				Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
 				return { false, "Failed to parse message" };
 			}
 
 			if (!received_message.contains("sub_id") || !received_message.at("sub_id").is_string())
 			{
-				Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", message));
+				Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
 				return { false, "Failed to parse message" };
 			}
 
 			if (!received_message.contains("message") || !received_message.at("message").is_string())
 			{
-				Logger::handle().write(LogTypes::Error, fmt::format("Failed to parse message: {}", message));
+				Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
 				return { false, "Failed to parse message" };
 			}
 
@@ -295,14 +294,14 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 
 	if (!consume_register)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start consume: {}", consume_error.value()));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start consume: {}", consume_error.value()));
 		return { false, consume_error };
 	}
 
 	auto [consume_start, consume_start_error] = work_queue_consume_->start_consume();
 	if (!consume_start)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start consume: {}", consume_start_error.value()));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start consume: {}", consume_start_error.value()));
 		return { false, consume_start_error };
 	}
 

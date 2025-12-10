@@ -2,8 +2,7 @@
 
 #include "Logger.h"
 
-#include "fmt/format.h"
-#include "fmt/xchar.h"
+#include <format>
 
 
 using namespace Utilities;
@@ -24,8 +23,8 @@ auto UserClientManager::add(const std::string& id, const std::string& sub_id) ->
 	auto iter = clients_.find({ id, sub_id });
 	if (iter != clients_.end())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Client is already exist: {}, {}", id, sub_id));
-		return { false, fmt::format("Client is already exist: {}, {}", id, sub_id) };
+		Logger::handle().write(LogTypes::Error, std::format("Client is already exist: {}, {}", id, sub_id));
+		return { false, std::format("Client is already exist: {}, {}", id, sub_id) };
 	}
 
 	clients_.insert({ {id, sub_id}, {"", ""} });
@@ -40,8 +39,8 @@ auto UserClientManager::remove(const std::string& id, const std::string& sub_id)
 	auto iter = clients_.find({ id, sub_id });
 	if (iter == clients_.end())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Client is not exist: {}, {}", id, sub_id));
-		return { false, fmt::format("Client is not exist: {}, {}", id, sub_id) };
+		Logger::handle().write(LogTypes::Error, std::format("Client is not exist: {}, {}", id, sub_id));
+		return { false, std::format("Client is not exist: {}, {}", id, sub_id) };
 	}
 
 	clients_.erase(iter);

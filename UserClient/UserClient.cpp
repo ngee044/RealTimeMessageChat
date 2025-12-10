@@ -8,8 +8,7 @@
 #include "ServerHeader.h"
 #include "ThreadWorker.h"
 
-#include "fmt/format.h"
-#include "fmt/xchar.h"
+#include <format>
 
 #include "boost/json.hpp"
 #include "boost/json/parse.hpp"
@@ -52,7 +51,7 @@ auto UserClient::start() -> std::tuple<bool, std::optional<std::string>>
 	auto [result, error_message] = create_thread_pool();
 	if (!result)
 	{
-		return { false, fmt::format("Failed to create thread pool: {}", error_message.value()) };
+		return { false, std::format("Failed to create thread pool: {}", error_message.value()) };
 	}
 
 	client_->wait_stop();
@@ -77,7 +76,7 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 	}
 	catch(const std::bad_alloc& e)
 	{
-		return { false, fmt::format("Memory allocation failed to ThreadPool: {}", e.what()) };
+		return { false, std::format("Memory allocation failed to ThreadPool: {}", e.what()) };
 	}
 	
 	for (auto i = 0; i < configurations_->high_priority_count(); i++)
@@ -89,7 +88,7 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
 		thread_pool_->push(worker);
@@ -104,7 +103,7 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
 		thread_pool_->push(worker );
@@ -119,7 +118,7 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, fmt::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
 		}
 
 		thread_pool_->push(worker);
@@ -128,7 +127,7 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 	auto [result, message] = thread_pool_->start();
 	if (!result)
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("Failed to start thread pool: {}", message.value()));
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start thread pool: {}", message.value()));
 		return { false, message };
 	}
 
@@ -155,7 +154,7 @@ auto UserClient::received_connection(const bool& condition, const bool& by_itsel
 		return { false, "client is null" };
 	}
 
-	Logger::handle().write(LogTypes::Information, fmt::format("received condition message from Server : {}", condition));
+	Logger::handle().write(LogTypes::Information, std::format("received condition message from Server : {}", condition));
 
 	if (!condition)
 	{
@@ -228,7 +227,7 @@ auto UserClient::parsing_message(const std::string& command, const std::string& 
 	auto iter = messages_.find(command);
 	if (iter == messages_.end())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("command is not found: {}", command));
+		Logger::handle().write(LogTypes::Error, std::format("command is not found: {}", command));
 		return { false, "command is not found" };
 	}
 
@@ -243,7 +242,7 @@ auto UserClient::parsing_message(const std::string& command, const std::string& 
 
 auto UserClient::update_user_clinet_status(const std::string message) -> std::tuple<bool, std::optional<std::string>>
 {
-	Logger::handle().write(LogTypes::Information, fmt::format("Received message: {}", message));
+	Logger::handle().write(LogTypes::Information, std::format("Received message: {}", message));
 	
 	boost::json::object send_message =
 	{
@@ -259,7 +258,7 @@ auto UserClient::update_user_clinet_status(const std::string message) -> std::tu
 
 auto UserClient::send_broadcast_message(const std::string message) -> std::tuple<bool, std::optional<std::string>>
 {
-	Logger::handle().write(LogTypes::Information, fmt::format("Received broadcast message: {}", message));
+	Logger::handle().write(LogTypes::Information, std::format("Received broadcast message: {}", message));
 
 	return { true, std::nullopt };
 }

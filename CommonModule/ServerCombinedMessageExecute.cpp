@@ -5,8 +5,7 @@
 #include "Converter.h"
 #include "Combiner.h"
 
-#include "fmt/xchar.h"
-#include "fmt/format.h"
+#include <format>
 
 using namespace Utilities;
 

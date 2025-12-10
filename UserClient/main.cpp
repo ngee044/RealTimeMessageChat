@@ -2,8 +2,7 @@
 #include "Configurations.h"
 #include "Logger.h"
 
-#include "fmt/format.h"
-#include "fmt/xchar.h"
+#include <format>
 
 #include <memory>
 #include <string>
@@ -74,6 +73,6 @@ void signal_callback(int32_t signum)
 		return;
 	}
 
-	Logger::handle().write(LogTypes::Information, fmt::format("attempt to stop AudioCalculator from signal {}", signum));
+	Logger::handle().write(LogTypes::Information, std::format("attempt to stop AudioCalculator from signal {}", signum));
 	client_->stop();
 }

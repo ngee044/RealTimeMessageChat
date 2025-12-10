@@ -4,8 +4,7 @@
 #include "Converter.h"
 #include "JobPriorities.h"
 
-#include "fmt/xchar.h"
-#include "fmt/format.h"
+#include <format>
 
 using namespace Utilities;
 

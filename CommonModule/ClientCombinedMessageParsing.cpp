@@ -9,8 +9,7 @@
 #include "boost/json.hpp"
 #include "boost/json/parse.hpp"
 
-#include "fmt/xchar.h"
-#include "fmt/format.h"
+#include <format>
 
 using namespace Utilities;
 
@@ -51,7 +50,7 @@ auto ClientCombinedMessageParsing::working() -> std::tuple<bool, std::optional<s
 	auto parsed_message = boost::json::parse(message, error_code);
 	if (error_code.failed())
 	{
-		Logger::handle().write(LogTypes::Error, fmt::format("[ClientCombinedMessageParsing] Failed to parse message: {}", error_code.message()));
+		Logger::handle().write(LogTypes::Error, std::format("[ClientCombinedMessageParsing] Failed to parse message: {}", error_code.message()));
 		return { false, "Failed to parse message" };
 	}
 
