@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:24.04 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
@@ -6,6 +6,8 @@ ENV TZ=Etc/UTC
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
+        gcc-13 \
+        g++-13 \
         cmake \
         git \
         curl \
@@ -21,6 +23,9 @@ RUN apt-get update \
         automake \
         libtool \
     && rm -rf /var/lib/apt/lists/*
+
+ENV CC=/usr/bin/gcc-13
+ENV CXX=/usr/bin/g++-13
 
 WORKDIR /opt
 RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git
@@ -50,10 +55,11 @@ RUN triplet="$VCPKG_TRIPLET"; \
         -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake \
         -DVCPKG_TARGET_TRIPLET="$triplet" \
         -DVCPKG_FEATURE_FLAGS=manifests \
+        -DCMAKE_CXX_FLAGS="-include cstring" \
         -DBUILD_SHARED_LIBS=OFF \
     && cmake --build build --config Release --parallel
 
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
