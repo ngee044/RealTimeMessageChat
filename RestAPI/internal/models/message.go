@@ -62,8 +62,8 @@ func (m *MessageRequest) Validate() error {
 	}
 
 	// Validate priority range
-	if m.Priority < 0 || m.Priority > 3 {
-		return fmt.Errorf("priority must be between 1 and 3")
+	if m.Priority != 0 && (m.Priority < 1 || m.Priority > 3) {
+		return fmt.Errorf("priority must be between 1 and 3 when provided")
 	}
 
 	// Set default priority if not provided

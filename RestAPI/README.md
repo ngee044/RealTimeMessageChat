@@ -5,7 +5,7 @@ A production-grade REST API service built with Go and Gin framework that publish
 ## Features
 
 - **High Performance**: Built with Go and Gin framework for optimal performance
-- **Message Publishing**: Publishes messages to RabbitMQ with priority support
+- **Message Publishing**: Publishes messages to RabbitMQ with priority in payload
 - **Auto-Reconnection**: Automatic reconnection to RabbitMQ on connection loss
 - **Structured Logging**: JSON-formatted logging with multiple levels
 - **Health Checks**: Built-in health check endpoints for monitoring
@@ -146,7 +146,7 @@ Send a message to RabbitMQ for processing.
 - `sub_id` (optional): Sub-identifier (e.g., room ID, channel ID)
 - `content` (required): Message content
 - `metadata` (optional): Additional metadata as key-value pairs
-- `priority` (optional): Message priority (1=high, 2=normal, 3=low, default=2)
+- `priority` (optional): Message priority (1=high, 2=normal, 3=low, default=2). Used by consumers for handling order.
 
 **Success Response (200 OK):**
 ```json
@@ -235,7 +235,7 @@ The application is configured via `config/api_server_config.json`:
 - `auto_delete`: Auto-delete queue when unused (default: false)
 - `exclusive`: Exclusive queue (default: false)
 - `no_wait`: No-wait declaration (default: false)
-- `connection_retry`: Connection retry attempts (default: 5)
+- `connection_retry`: Connection retry attempts (1-5, default: 5)
 - `retry_delay_seconds`: Delay between retries (default: 5)
 
 ### Logging Configuration

@@ -75,12 +75,36 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}
 
+	if c.Server.ReadTimeout <= 0 {
+		return fmt.Errorf("read_timeout_seconds must be greater than 0")
+	}
+
+	if c.Server.WriteTimeout <= 0 {
+		return fmt.Errorf("write_timeout_seconds must be greater than 0")
+	}
+
+	if c.Server.MaxHeaderBytes <= 0 {
+		return fmt.Errorf("max_header_bytes must be greater than 0")
+	}
+
+	if c.Server.ShutdownTimeout <= 0 {
+		return fmt.Errorf("shutdown_timeout_seconds must be greater than 0")
+	}
+
 	if c.RabbitMQ.Host == "" {
 		return fmt.Errorf("rabbitmq host is required")
 	}
 
 	if c.RabbitMQ.QueueName == "" {
 		return fmt.Errorf("rabbitmq queue name is required")
+	}
+
+	if c.RabbitMQ.ConnectionRetry < 1 || c.RabbitMQ.ConnectionRetry > 5 {
+		return fmt.Errorf("rabbitmq connection_retry must be between 1 and 5")
+	}
+
+	if c.RabbitMQ.RetryDelay <= 0 {
+		return fmt.Errorf("rabbitmq retry_delay_seconds must be greater than 0")
 	}
 
 	validModes := map[string]bool{"debug": true, "release": true, "test": true}
