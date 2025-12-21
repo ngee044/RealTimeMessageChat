@@ -104,6 +104,33 @@ services:
     networks:
       - rtmc-network
 
+  api-server:
+    build:
+      context: ../RestAPI
+      dockerfile: Dockerfile
+    image: rtmc-api-server:latest
+    container_name: api-server
+    hostname: api-server
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/api_server_config.json:/app/config/api_server_config.json:ro
+      - ./logs/api:/app/logs
+    environment:
+      - GIN_MODE=release
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - rtmc-network
+
 networks:
   rtmc-network:
     driver: bridge

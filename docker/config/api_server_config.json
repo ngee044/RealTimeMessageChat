@@ -1,0 +1,30 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "mode": "release",
+    "read_timeout_seconds": 30,
+    "write_timeout_seconds": 30,
+    "max_header_bytes": 1048576,
+    "shutdown_timeout_seconds": 15
+  },
+  "rabbitmq": {
+    "host": "rabbitmq",
+    "port": 5672,
+    "username": "guest",
+    "password": "guest",
+    "vhost": "/",
+    "queue_name": "message_queue",
+    "durable": true,
+    "auto_delete": false,
+    "exclusive": false,
+    "no_wait": false,
+    "connection_retry": 5,
+    "retry_delay_seconds": 5
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "output_path": "/app/logs/api_server.log"
+  }
+}
