@@ -10,6 +10,7 @@ set(SOURCE_FILES
 	ClientMessageExecute.cpp
 	ClientMessageParsing.cpp
 	DatabaseConnector.cpp
+	DBWorker.cpp
 	ServerCombinedMessageExecute.cpp
     ServerCombinedMessageParsing.cpp
     ServerMessageExecute.cpp
@@ -22,6 +23,7 @@ set (HEADER_FILES
 	ClientMessageExecute.h
 	ClientMessageParsing.h
 	DatabaseConnector.h
+	DBWorker.h
 	ServerCombinedMessageExecute.h
 	ServerCombinedMessageParsing.h
 	ServerMessageExecute.h
@@ -38,4 +40,4 @@ add_library(${LIBRARY_NAME} ${HEADER_FILES} ${SOURCE_FILES})
 find_package(Boost REQUIRED COMPONENTS json)
 
 target_include_directories(${LIBRARY_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(${LIBRARY_NAME} PUBLIC Boost::json Utilities Thread Network)
+target_link_libraries(${LIBRARY_NAME} PUBLIC Boost::json Utilities Thread Network Database)

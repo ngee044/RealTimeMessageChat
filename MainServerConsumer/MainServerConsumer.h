@@ -4,6 +4,7 @@
 #include "WorkQueueConsume.h"
 #include "SSLOptions.h"
 #include "RedisClient.h"
+#include "PostgresDB.h"
 
 #include <string>
 #include <memory>
@@ -37,5 +38,6 @@ private:
 
 	const int work_queue_channel_id_;
 	std::shared_ptr<RedisClient> redis_client_;
+	std::shared_ptr<Database::PostgresDB> db_client_;
 
 };

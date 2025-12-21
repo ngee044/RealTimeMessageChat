@@ -19,7 +19,7 @@ project(${PROGRAM_NAME} VERSION 1.0.0.0)
 
 add_executable(${PROGRAM_NAME} ${HEADER_FILES} ${SOURCE_FILES})
 
-target_link_libraries(${PROGRAM_NAME} PUBLIC Utilities Thread Redis RabbitMQ)
+target_link_libraries(${PROGRAM_NAME} PUBLIC Utilities Thread Redis RabbitMQ Database CommonModule)
 target_include_directories(${PROGRAM_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 set(JSON_FILES

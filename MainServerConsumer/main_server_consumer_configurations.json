@@ -29,6 +29,12 @@
 	"rabbit_mq_password": "guest",
 
 	"consume_queue_name": "message_broadcast_queue",
-	
+
+	"use_database": false,
+	"database_connection_string": "host=localhost port=5432 dbname=rtmc user=rtmc_user password=rtmc_password",
+	"database_encryption_enabled": false,
+	"database_encryption_key": "",
+	"database_encryption_iv": "",
+
 	"empty": ""
 }

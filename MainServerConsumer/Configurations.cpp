@@ -45,7 +45,11 @@ Configurations::Configurations(ArgumentParser&& arguments)
 	, engine_("")
 	, client_cert_("")
 	, client_key_("")
-	
+	, use_database_(false)
+	, database_connection_string_("")
+	, database_encryption_enabled_(false)
+	, database_encryption_key_("")
+	, database_encryption_iv_("")
 {
 	root_path_ = arguments.program_folder();
 
@@ -117,6 +121,16 @@ auto Configurations::client_key() -> std::string { return client_key_; }
 
 auto Configurations::consume_queue_name() -> std::string { return consume_queue_name_; }
 
+auto Configurations::use_database() -> bool { return use_database_; }
+
+auto Configurations::database_connection_string() -> std::string { return database_connection_string_; }
+
+auto Configurations::database_encryption_enabled() -> bool { return database_encryption_enabled_; }
+
+auto Configurations::database_encryption_key() -> std::string { return database_encryption_key_; }
+
+auto Configurations::database_encryption_iv() -> std::string { return database_encryption_iv_; }
+
 auto Configurations::load() -> void
 {
 	std::filesystem::path path = root_path_ + "main_server_consumer_configurations.json";
@@ -147,17 +161,17 @@ auto Configurations::load() -> void
 		log_root_path_ = message.at("log_root_path").as_string().data();
 	}
 
-	if (message.contains("write_file") && message.at("write_file").is_string())
+	if (message.contains("write_file_log") && message.at("write_file_log").is_number())
 	{
 		write_file_ = static_cast<LogTypes>(message.at("write_file_log").as_int64());
 	}
 
-	if (message.contains("write_console") && message.at("write_console").is_string())
+	if (message.contains("write_console_log") && message.at("write_console_log").is_number())
 	{
-		write_console_ = static_cast<LogTypes>(message.at("write_console").as_int64());
+		write_console_ = static_cast<LogTypes>(message.at("write_console_log").as_int64());
 	}
 
-	if (message.contains("callback_message_log") && message.at("callback_message_log").is_string())
+	if (message.contains("callback_message_log") && message.at("callback_message_log").is_number())
 	{
 		callback_message_log_ = static_cast<LogTypes>(message.at("callback_message_log").as_int64());
 	}
@@ -295,6 +309,32 @@ auto Configurations::load() -> void
 	if (message.contains("consume_queue_name") && message.at("consume_queue_name").is_string())
 	{
 		consume_queue_name_ = message.at("consume_queue_name").as_string().data();
+	}
+
+	// Database configuration
+	if (message.contains("use_database") && message.at("use_database").is_bool())
+	{
+		use_database_ = message.at("use_database").as_bool();
+	}
+
+	if (message.contains("database_connection_string") && message.at("database_connection_string").is_string())
+	{
+		database_connection_string_ = message.at("database_connection_string").as_string().data();
+	}
+
+	if (message.contains("database_encryption_enabled") && message.at("database_encryption_enabled").is_bool())
+	{
+		database_encryption_enabled_ = message.at("database_encryption_enabled").as_bool();
+	}
+
+	if (message.contains("database_encryption_key") && message.at("database_encryption_key").is_string())
+	{
+		database_encryption_key_ = message.at("database_encryption_key").as_string().data();
+	}
+
+	if (message.contains("database_encryption_iv") && message.at("database_encryption_iv").is_string())
+	{
+		database_encryption_iv_ = message.at("database_encryption_iv").as_string().data();
 	}
 }
 

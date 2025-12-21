@@ -35,6 +35,29 @@ services:
     networks:
       - rtmc-network
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    hostname: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: rtmc
+      POSTGRES_USER: rtmc_user
+      POSTGRES_PASSWORD: rtmc_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rtmc_user -d rtmc"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - rtmc-network
+
   mainserver:
     build:
       context: ..
@@ -69,6 +92,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       mainserver:
         condition: service_started
     volumes:
@@ -82,3 +107,6 @@ services:
 networks:
   rtmc-network:
     driver: bridge
+
+volumes:
+  postgres-data:

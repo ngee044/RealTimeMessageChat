@@ -54,6 +54,13 @@ public:
 
 	auto consume_queue_name() -> std::string;
 
+	// Database configuration
+	auto use_database() -> bool;
+	auto database_connection_string() -> std::string;
+	auto database_encryption_enabled() -> bool;
+	auto database_encryption_key() -> std::string;
+	auto database_encryption_iv() -> std::string;
+
 protected:
 	auto load() -> void;
 	auto parse(ArgumentParser& arguments) -> void;
@@ -99,4 +106,11 @@ private:
 	std::string engine_;
 	std::string client_cert_;
 	std::string client_key_;
+
+	// Database fields
+	bool use_database_;
+	std::string database_connection_string_;
+	bool database_encryption_enabled_;
+	std::string database_encryption_key_;
+	std::string database_encryption_iv_;
 };
