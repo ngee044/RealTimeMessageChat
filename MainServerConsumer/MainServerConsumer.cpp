@@ -1,4 +1,5 @@
 #include "MainServerConsumer.h"
+#include "DBWorker.h"
 
 #include "Logger.h"
 #include "Converter.h"
@@ -19,6 +20,7 @@ MainServerConsumer::MainServerConsumer(std::shared_ptr<Configurations> configura
 	, work_queue_consume_(nullptr)
 	, work_queue_channel_id_(1)
 	, redis_client_(nullptr)
+	, db_client_(nullptr)
 {
 }
 
@@ -175,6 +177,30 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 
 	Logger::handle().write(LogTypes::Information, "redis connected");
 
+	// Initialize database connection if enabled
+	if (configurations_->use_database())
+	{
+		try
+		{
+			db_client_ = std::make_shared<Database::PostgresDB>(configurations_->database_connection_string());
+			Logger::handle().write(LogTypes::Information, "Database client initialized successfully");
+		}
+		catch (const std::exception& e)
+		{
+			destroy_thread_pool();
+			work_queue_consume_->stop();
+			work_queue_consume_.reset();
+			redis_client_.reset();
+
+			Logger::handle().write(LogTypes::Error, std::format("Failed to initialize database: {}", e.what()));
+			return { false, std::format("Failed to initialize database: {}", e.what()) };
+		}
+	}
+	else
+	{
+		Logger::handle().write(LogTypes::Information, "Database is not enabled");
+	}
+
 	std::tie(result, error_message) = consume_queue();
 	if (!result)
 	{
@@ -218,6 +244,11 @@ auto MainServerConsumer::stop() -> void
 	{
 		redis_client_->disconnect();
 		redis_client_.reset();
+	}
+
+	if (db_client_ != nullptr)
+	{
+		db_client_.reset();
 	}
 }
 
@@ -281,13 +312,48 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 				return { false, "Failed to parse message" };
 			}
 
-			if (!received_message.contains("message") || !received_message.at("message").is_string())
+			if (!received_message.contains("message") || !received_message.at("message").is_object())
 			{
 				Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
 				return { false, "Failed to parse message" };
 			}
 
+			// Store message in Redis for MainServer to broadcast
 			redis_client_->set(configurations_->global_message_key(), message);
+
+			// Store message in database asynchronously if database is enabled
+			if (configurations_->use_database() && db_client_ != nullptr)
+			{
+				try
+				{
+					auto db_worker = std::make_shared<Database::DBWorker>(
+						db_client_,
+						message,
+						configurations_->database_encryption_enabled(),
+						configurations_->database_encryption_key(),
+						configurations_->database_encryption_iv(),
+						Thread::JobPriorities::Low
+					);
+
+					auto [push_success, push_error] = thread_pool_->push(db_worker);
+					if (!push_success)
+					{
+						Logger::handle().write(LogTypes::Error,
+							std::format("Failed to push DBWorker to thread pool: {}", push_error.value_or("Unknown error")));
+						// Don't return error - database storage is non-critical
+					}
+					else
+					{
+						Logger::handle().write(LogTypes::Information, "DBWorker job pushed to thread pool");
+					}
+				}
+				catch (const std::exception& e)
+				{
+					Logger::handle().write(LogTypes::Error,
+						std::format("Exception creating DBWorker: {}", e.what()));
+					// Don't return error - database storage is non-critical
+				}
+			}
 
 			return { true, std::nullopt };
 		});
@@ -307,4 +373,3 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 
 	return { true, std::nullopt };	
 }
-

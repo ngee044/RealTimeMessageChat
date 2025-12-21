@@ -29,5 +29,10 @@
   "ca_cert": "",
   "engine": "",
   "client_cert": "",
-  "client_key": ""
+  "client_key": "",
+  "use_database": true,
+  "database_connection_string": "host=postgres port=5432 dbname=rtmc user=rtmc_user password=rtmc_password",
+  "database_encryption_enabled": false,
+  "database_encryption_key": "",
+  "database_encryption_iv": ""
 }
