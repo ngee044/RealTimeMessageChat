@@ -2,18 +2,35 @@
 
 A production-grade REST API service built with Go and Gin framework that publishes messages to RabbitMQ for the RealTimeMessageChat system.
 
-## Features
+## 🚀 Features
 
+### Core Functionality
 - **High Performance**: Built with Go and Gin framework for optimal performance
-- **Message Publishing**: Publishes messages to RabbitMQ with priority in payload
-- **Auto-Reconnection**: Automatic reconnection to RabbitMQ on connection loss
-- **Structured Logging**: JSON-formatted logging with multiple levels
-- **Health Checks**: Built-in health check endpoints for monitoring
-- **Graceful Shutdown**: Clean shutdown with connection draining
-- **Docker Support**: Containerized deployment with health checks
+- **Message Publishing**: Publishes messages to RabbitMQ with priority support
+- **User Management**: Complete CRUD operations for user accounts
+- **Message History**: Query and retrieve message history with pagination
+- **Real-time Status**: Track user online/offline status
+
+### Architecture & Design Patterns
+- **Clean Architecture**: Separation of concerns (handlers → services → repositories)
+- **Repository Pattern**: Database abstraction layer for testability
+- **Service Layer**: Business logic encapsulation
+- **Dependency Injection**: Loosely coupled, easily testable components
+
+### Production-Ready Features
+- **PostgreSQL Database**: Persistent storage with JSONB support
+- **Redis Caching**: User status and message caching for performance
+- **RabbitMQ Integration**: Reliable message queuing with auto-reconnection
+- **Prometheus Metrics**: Comprehensive application and business metrics
+- **Structured Logging**: JSON-formatted logs with request tracing
+- **Rate Limiting**: IP-based and user-based rate limiting
+- **JWT Authentication**: Secure API endpoints (optional)
+- **Request ID Tracking**: End-to-end request tracing
+- **Graceful Shutdown**: Proper resource cleanup
+- **Health Checks**: Monitor all service dependencies
 - **CORS Support**: Cross-Origin Resource Sharing enabled
 - **Input Validation**: Comprehensive request validation
-- **Error Handling**: Robust error handling with detailed error responses
+- **Error Handling**: Structured error responses with proper HTTP status codes
 
 ## Architecture
 

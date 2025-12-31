@@ -148,6 +148,11 @@ func (s *RabbitMQService) handleReconnect() {
 
 // Publish publishes a message to the queue
 func (s *RabbitMQService) Publish(ctx context.Context, message []byte) error {
+	return s.PublishWithPriority(ctx, message, 0)
+}
+
+// PublishWithPriority publishes a message to the queue with specified priority
+func (s *RabbitMQService) PublishWithPriority(ctx context.Context, message []byte, priority uint8) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -164,14 +169,15 @@ func (s *RabbitMQService) Publish(ctx context.Context, message []byte) error {
 		ContentType:  "application/json",
 		Body:         message,
 		Timestamp:    time.Now(),
+		Priority:     priority,
 	}
 
 	err := s.channel.PublishWithContext(
 		ctx,
-		"",                   // exchange
-		s.config.QueueName,   // routing key
-		false,                // mandatory
-		false,                // immediate
+		"",                 // exchange
+		s.config.QueueName, // routing key
+		false,              // mandatory
+		false,              // immediate
 		publishing,
 	)
 

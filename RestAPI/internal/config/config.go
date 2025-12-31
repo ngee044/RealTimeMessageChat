@@ -10,7 +10,11 @@ import (
 type Config struct {
 	Server   ServerConfig   `json:"server"`
 	RabbitMQ RabbitMQConfig `json:"rabbitmq"`
+	Redis    RedisConfig    `json:"redis"`
+	Database DatabaseConfig `json:"database"`
 	Logging  LoggingConfig  `json:"logging"`
+	Auth     AuthConfig     `json:"auth"`
+	Metrics  MetricsConfig  `json:"metrics"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -45,6 +49,48 @@ type LoggingConfig struct {
 	Level      string `json:"level"` // trace, debug, info, warn, error, fatal, panic
 	Format     string `json:"format"` // json, text
 	OutputPath string `json:"output_path"`
+}
+
+// RedisConfig holds Redis configuration
+type RedisConfig struct {
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	Password     string `json:"password"`
+	DB           int    `json:"db"`
+	DialTimeout  int    `json:"dial_timeout_seconds"`
+	ReadTimeout  int    `json:"read_timeout_seconds"`
+	WriteTimeout int    `json:"write_timeout_seconds"`
+	PoolSize     int    `json:"pool_size"`
+	MinIdleConns int    `json:"min_idle_conns"`
+	Enabled      bool   `json:"enabled"`
+}
+
+// DatabaseConfig holds PostgreSQL configuration
+type DatabaseConfig struct {
+	Host            string `json:"host"`
+	Port            int    `json:"port"`
+	User            string `json:"user"`
+	Password        string `json:"password"`
+	DBName          string `json:"dbname"`
+	SSLMode         string `json:"sslmode"`
+	MaxOpenConns    int    `json:"max_open_conns"`
+	MaxIdleConns    int    `json:"max_idle_conns"`
+	ConnMaxLifetime int    `json:"conn_max_lifetime_minutes"`
+	Enabled         bool   `json:"enabled"`
+}
+
+// AuthConfig holds authentication configuration
+type AuthConfig struct {
+	JWTSecret           string `json:"jwt_secret"`
+	JWTExpirationHours  int    `json:"jwt_expiration_hours"`
+	RefreshExpirationHours int `json:"refresh_expiration_hours"`
+	Enabled             bool   `json:"enabled"`
+}
+
+// MetricsConfig holds metrics configuration
+type MetricsConfig struct {
+	Enabled bool   `json:"enabled"`
+	Path    string `json:"path"`
 }
 
 // LoadConfig loads configuration from a JSON file
@@ -137,4 +183,21 @@ func (c *Config) GetRabbitMQURL() string {
 // GetServerAddress returns the server address
 func (c *Config) GetServerAddress() string {
 	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
+}
+
+// GetDatabaseDSN returns the PostgreSQL connection string
+func (c *Config) GetDatabaseDSN() string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		c.Database.Host,
+		c.Database.Port,
+		c.Database.User,
+		c.Database.Password,
+		c.Database.DBName,
+		c.Database.SSLMode,
+	)
+}
+
+// GetRedisAddress returns the Redis address
+func (c *Config) GetRedisAddress() string {
+	return fmt.Sprintf("%s:%d", c.Redis.Host, c.Redis.Port)
 }
