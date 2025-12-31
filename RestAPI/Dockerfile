@@ -2,7 +2,7 @@
 FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git ca-certificates tzdata
+RUN apk add --no-cache git gcc musl-dev ca-certificates tzdata
 
 # Set working directory
 WORKDIR /build
@@ -18,15 +18,15 @@ COPY . .
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags="-w -s -X main.version=1.0.0 -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -ldflags="-w -s -X main.version=2.0.0 -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o api-server \
-    ./cmd/server
+    ./cmd/server/main.go
 
 # Runtime stage
 FROM alpine:latest
 
 # Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata wget
 
 # Create non-root user
 RUN addgroup -g 1000 appuser && \
