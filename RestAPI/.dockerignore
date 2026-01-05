@@ -1,0 +1,47 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+*.md
+
+# IDE files
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Test files
+*_test.go
+coverage.txt
+coverage.html
+
+# Build artifacts
+build/
+dist/
+api-server
+
+# Temporary files
+tmp/
+temp/
+
+# Environment files
+.env
+.env.*
+
+# Makefile
+Makefile
+
+# CI/CD
+.github/
+.gitlab-ci.yml
