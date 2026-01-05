@@ -25,7 +25,7 @@ func NewMessageHandler(rabbitMQ *services.RabbitMQService) *MessageHandler {
 	}
 }
 
-// SendMessage handles the POST /send_message endpoint
+// SendMessage handles the POST /api/v1/messages/send endpoint
 // @Summary Send a message to RabbitMQ
 // @Description Publishes a message to RabbitMQ queue for processing
 // @Tags messages
@@ -35,7 +35,7 @@ func NewMessageHandler(rabbitMQ *services.RabbitMQService) *MessageHandler {
 // @Success 200 {object} models.MessageResponse
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
-// @Router /send_message [post]
+// @Router /api/v1/messages/send [post]
 func (h *MessageHandler) SendMessage(c *gin.Context) {
 	var req models.MessageRequest
 
@@ -126,32 +126,4 @@ func (h *MessageHandler) SendMessage(c *gin.Context) {
 			"priority":   req.Priority,
 		},
 	))
-}
-
-// HealthCheck handles the GET /health endpoint
-// @Summary Health check
-// @Description Check the health status of the API and its dependencies
-// @Tags health
-// @Produce json
-// @Success 200 {object} map[string]interface{}
-// @Failure 503 {object} map[string]interface{}
-// @Router /health [get]
-func (h *MessageHandler) HealthCheck(c *gin.Context) {
-	rabbitMQHealthy := h.rabbitMQ.IsHealthy()
-
-	status := "healthy"
-	httpStatus := http.StatusOK
-
-	if !rabbitMQHealthy {
-		status = "unhealthy"
-		httpStatus = http.StatusServiceUnavailable
-	}
-
-	c.JSON(httpStatus, gin.H{
-		"status": status,
-		"services": gin.H{
-			"rabbitmq": rabbitMQHealthy,
-		},
-		"timestamp": time.Now().Unix(),
-	})
 }

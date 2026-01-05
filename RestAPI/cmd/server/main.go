@@ -18,7 +18,6 @@ import (
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/service"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/services"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/pkg/logger"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -187,58 +186,22 @@ func setupRouter(cfg *config.Config, app *App) *gin.Engine {
 	router.Use(middleware.Logger())
 	router.Use(middleware.CORS())
 
+	systemHandler := handlers.NewSystemHandler(app.rabbitMQ, app.redis, app.db, version)
+
 	// Metrics middleware (if enabled)
 	if cfg.Metrics.Enabled {
 		router.Use(middleware.PrometheusMetrics())
-		router.GET(cfg.Metrics.Path, gin.WrapH(promhttp.Handler()))
+		router.GET(cfg.Metrics.Path, handlers.MetricsHandler())
 	}
 
 	// Rate limiting middleware
 	router.Use(middleware.RateLimitByIP(10, 20)) // 10 requests/sec, burst 20
 
 	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		rabbitMQHealthy := app.rabbitMQ.IsHealthy()
-		redisHealthy := true
-		dbHealthy := true
-
-		if app.redis != nil {
-			redisHealthy = app.redis.IsHealthy(c.Request.Context())
-		}
-
-		if app.db != nil {
-			dbHealthy = app.db.IsHealthy()
-		}
-
-		status := "healthy"
-		httpStatus := http.StatusOK
-
-		if !rabbitMQHealthy || !dbHealthy {
-			status = "unhealthy"
-			httpStatus = http.StatusServiceUnavailable
-		}
-
-		c.JSON(httpStatus, gin.H{
-			"status": status,
-			"services": gin.H{
-				"rabbitmq": rabbitMQHealthy,
-				"redis":    redisHealthy,
-				"database": dbHealthy,
-			},
-			"timestamp": time.Now().Unix(),
-			"version":   version,
-		})
-	})
+	router.GET("/health", systemHandler.Health)
 
 	// Root endpoint
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"service": "RealTimeMessageChat REST API",
-			"version": version,
-			"status":  "running",
-			"docs":    "/api/v1",
-		})
-	})
+	router.GET("/", systemHandler.Root)
 
 	// API v1 routes
 	setupV1Routes(router, cfg, app)

@@ -34,6 +34,17 @@ type UpdateStatusRequest struct {
 }
 
 // CreateUser handles POST /users
+// @Summary Create user
+// @Description Create a new user.
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body CreateUserRequest true "User to create"
+// @Success 201 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 409 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /api/v1/users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 
@@ -55,6 +66,15 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 }
 
 // GetUser handles GET /users/:userID
+// @Summary Get user
+// @Description Retrieve a user by ID.
+// @Tags users
+// @Produce json
+// @Param userID path string true "User ID"
+// @Success 200 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /api/v1/users/{userID} [get]
 func (h *UserHandler) GetUser(c *gin.Context) {
 	userID := c.Param("userID")
 
@@ -68,6 +88,17 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 }
 
 // UpdateStatus handles PUT /users/:userID/status
+// @Summary Update user status
+// @Description Update a user's status.
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param userID path string true "User ID"
+// @Param status body UpdateStatusRequest true "Status update"
+// @Success 200 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /api/v1/users/{userID}/status [put]
 func (h *UserHandler) UpdateStatus(c *gin.Context) {
 	userID := c.Param("userID")
 
@@ -86,6 +117,15 @@ func (h *UserHandler) UpdateStatus(c *gin.Context) {
 }
 
 // ListUsers handles GET /users
+// @Summary List users
+// @Description Retrieve users with pagination.
+// @Tags users
+// @Produce json
+// @Param limit query int false "Pagination limit"
+// @Param offset query int false "Pagination offset"
+// @Success 200 {object} response.Response{data=response.PaginatedData}
+// @Failure 500 {object} response.Response
+// @Router /api/v1/users [get]
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	params := pagination.ParseFromQuery(c)
 
@@ -99,6 +139,15 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 }
 
 // GetOnlineUsers handles GET /users/online
+// @Summary List online users
+// @Description Retrieve online users with pagination.
+// @Tags users
+// @Produce json
+// @Param limit query int false "Pagination limit"
+// @Param offset query int false "Pagination offset"
+// @Success 200 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /api/v1/users/online [get]
 func (h *UserHandler) GetOnlineUsers(c *gin.Context) {
 	params := pagination.ParseFromQuery(c)
 
@@ -117,6 +166,14 @@ func (h *UserHandler) GetOnlineUsers(c *gin.Context) {
 }
 
 // DeleteUser handles DELETE /users/:userID
+// @Summary Delete user
+// @Description Delete a user by ID.
+// @Tags users
+// @Produce json
+// @Param userID path string true "User ID"
+// @Success 200 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /api/v1/users/{userID} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	userID := c.Param("userID")
 
