@@ -1,3 +1,8 @@
+// @title RealTimeMessageChat REST API
+// @version 2.0.0
+// @description REST API for the RealTimeMessageChat system.
+// @BasePath /
+// @schemes http https
 package main
 
 import (
@@ -11,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/docs"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/config"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/handlers"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/middleware"
@@ -18,6 +24,8 @@ import (
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/service"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/services"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/pkg/logger"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 var (
@@ -51,6 +59,8 @@ func main() {
 
 	// Set Gin mode
 	gin.SetMode(cfg.Server.Mode)
+
+	docs.SwaggerInfo.Version = version
 
 	// Create Gin router with middleware
 	router := setupRouter(cfg, app)
@@ -202,6 +212,9 @@ func setupRouter(cfg *config.Config, app *App) *gin.Engine {
 
 	// Root endpoint
 	router.GET("/", systemHandler.Root)
+
+	// Swagger UI
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// API v1 routes
 	setupV1Routes(router, cfg, app)

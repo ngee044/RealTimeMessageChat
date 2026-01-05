@@ -1,4 +1,4 @@
-.PHONY: help build run test clean docker-build docker-run fmt lint vet tidy
+.PHONY: help build run test clean docker-build docker-run fmt lint vet tidy swagger swagger-validate
 
 # Variables
 BINARY_NAME=api-server
@@ -75,7 +75,21 @@ deps: ## Download dependencies
 install-tools: ## Install development tools
 	@echo "Installing development tools..."
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install github.com/swaggo/swag/cmd/swag@latest
 	@echo "Tools installed"
+
+swagger: ## Generate Swagger documentation
+	@echo "Generating Swagger docs..."
+	@swag init -g cmd/server/main.go -o docs --parseDependency --parseInternal
+	@echo "Fixing swag version compatibility..."
+	@sed -i '' '/LeftDelim:/d' docs/docs.go 2>/dev/null || true
+	@sed -i '' '/RightDelim:/d' docs/docs.go 2>/dev/null || true
+	@echo "Swagger docs generated"
+
+swagger-validate: ## Validate and format Swagger comments
+	@echo "Validating Swagger comments..."
+	@swag fmt -g cmd/server/main.go
+	@echo "Swagger validation complete"
 
 check: fmt vet lint test ## Run all checks (fmt, vet, lint, test)
 

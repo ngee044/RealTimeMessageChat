@@ -1,0 +1,561 @@
+basePath: /
+definitions:
+  github_com_hyunkyulee_RealTimeMessageChat_RestAPI_internal_models.ErrorResponse:
+    properties:
+      code:
+        type: string
+      error:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: integer
+    type: object
+  github_com_hyunkyulee_RealTimeMessageChat_RestAPI_internal_models.MessageRequest:
+    properties:
+      command:
+        type: string
+      content:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      priority:
+        description: 1=high, 2=normal, 3=low
+        type: integer
+      sub_id:
+        type: string
+      timestamp:
+        type: integer
+      user_id:
+        type: string
+    required:
+    - command
+    - content
+    - user_id
+    type: object
+  github_com_hyunkyulee_RealTimeMessageChat_RestAPI_internal_models.MessageResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      message_id:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: integer
+    type: object
+  github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.PaginatedData:
+    properties:
+      items: {}
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response:
+    properties:
+      code:
+        type: string
+      data: {}
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: integer
+    type: object
+  internal_handlers.CreateUserRequest:
+    properties:
+      email:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
+    required:
+    - user_id
+    type: object
+  internal_handlers.UpdateMessageStatusRequest:
+    properties:
+      status:
+        type: string
+    required:
+    - status
+    type: object
+  internal_handlers.UpdateStatusRequest:
+    properties:
+      status:
+        type: string
+    required:
+    - status
+    type: object
+info:
+  contact: {}
+  description: REST API for the RealTimeMessageChat system.
+  title: RealTimeMessageChat REST API
+  version: 2.0.0
+paths:
+  /:
+    get:
+      description: Returns service metadata and docs path.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Service info
+      tags:
+      - system
+  /api/v1/messages/{messageID}:
+    delete:
+      description: Delete a message by ID.
+      parameters:
+      - description: Message ID
+        in: path
+        name: messageID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Delete message
+      tags:
+      - messages
+    get:
+      description: Retrieve a single message by message ID.
+      parameters:
+      - description: Message ID
+        in: path
+        name: messageID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Get message by ID
+      tags:
+      - messages
+  /api/v1/messages/{messageID}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Update status for a message by ID.
+      parameters:
+      - description: Message ID
+        in: path
+        name: messageID
+        required: true
+        type: string
+      - description: Status update
+        in: body
+        name: status
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.UpdateMessageStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Update message status
+      tags:
+      - messages
+  /api/v1/messages/recent:
+    get:
+      description: Retrieve recent messages with pagination.
+      parameters:
+      - description: Pagination limit
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.PaginatedData'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Get recent messages
+      tags:
+      - messages
+  /api/v1/messages/send:
+    post:
+      consumes:
+      - application/json
+      description: Publishes a message to RabbitMQ queue for processing
+      parameters:
+      - description: Message to send
+        in: body
+        name: message
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_internal_models.MessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_internal_models.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_internal_models.ErrorResponse'
+      summary: Send a message to RabbitMQ
+      tags:
+      - messages
+  /api/v1/messages/stats:
+    get:
+      description: Retrieve message counts by status.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Get message stats
+      tags:
+      - messages
+  /api/v1/messages/status/{status}:
+    get:
+      description: Retrieve messages filtered by status with pagination.
+      parameters:
+      - description: Message status
+        in: path
+        name: status
+        required: true
+        type: string
+      - description: Pagination limit
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.PaginatedData'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Get messages by status
+      tags:
+      - messages
+  /api/v1/users:
+    get:
+      description: Retrieve users with pagination.
+      parameters:
+      - description: Pagination limit
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.PaginatedData'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: List users
+      tags:
+      - users
+    post:
+      consumes:
+      - application/json
+      description: Create a new user.
+      parameters:
+      - description: User to create
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Create user
+      tags:
+      - users
+  /api/v1/users/{userID}:
+    delete:
+      description: Delete a user by ID.
+      parameters:
+      - description: User ID
+        in: path
+        name: userID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Delete user
+      tags:
+      - users
+    get:
+      description: Retrieve a user by ID.
+      parameters:
+      - description: User ID
+        in: path
+        name: userID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Get user
+      tags:
+      - users
+  /api/v1/users/{userID}/messages:
+    get:
+      description: Retrieve messages for a specific user with pagination.
+      parameters:
+      - description: User ID
+        in: path
+        name: userID
+        required: true
+        type: string
+      - description: Pagination limit
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.PaginatedData'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Get messages by user
+      tags:
+      - messages
+  /api/v1/users/{userID}/status:
+    put:
+      consumes:
+      - application/json
+      description: Update a user's status.
+      parameters:
+      - description: User ID
+        in: path
+        name: userID
+        required: true
+        type: string
+      - description: Status update
+        in: body
+        name: status
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.UpdateStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: Update user status
+      tags:
+      - users
+  /api/v1/users/online:
+    get:
+      description: Retrieve online users with pagination.
+      parameters:
+      - description: Pagination limit
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_hyunkyulee_RealTimeMessageChat_RestAPI_pkg_response.Response'
+      summary: List online users
+      tags:
+      - users
+  /health:
+    get:
+      description: Check API and dependency health status.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health check
+      tags:
+      - health
+  /metrics:
+    get:
+      description: Exposes Prometheus metrics when enabled.
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Prometheus metrics
+      tags:
+      - metrics
+schemes:
+- http
+- https
+swagger: "2.0"
