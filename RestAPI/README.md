@@ -138,7 +138,34 @@ RestAPI/
 
 ## API Endpoints
 
-### POST /api/v1/send_message
+### Overview (v1)
+
+Base path: `/api/v1`
+
+Core endpoint:
+- `POST /api/v1/messages/send`
+
+Database-backed endpoints (available only when `database.enabled` is true):
+- `GET /api/v1/messages/recent`
+- `GET /api/v1/messages/stats`
+- `GET /api/v1/messages/:messageID`
+- `PATCH /api/v1/messages/:messageID/status`
+- `DELETE /api/v1/messages/:messageID`
+- `GET /api/v1/messages/status/:status`
+- `POST /api/v1/users`
+- `GET /api/v1/users`
+- `GET /api/v1/users/online`
+- `GET /api/v1/users/:userID`
+- `PUT /api/v1/users/:userID/status`
+- `DELETE /api/v1/users/:userID`
+- `GET /api/v1/users/:userID/messages`
+
+System endpoints:
+- `GET /health`
+- `GET /`
+- `GET /metrics` (when metrics are enabled)
+
+### POST /api/v1/messages/send
 
 Send a message to RabbitMQ for processing.
 
@@ -266,7 +293,7 @@ The application is configured via `config/api_server_config.json`:
 
 ```bash
 # Send a message
-curl -X POST http://localhost:8080/api/v1/send_message \
+curl -X POST http://localhost:8080/api/v1/messages/send \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": "user123",
@@ -283,7 +310,7 @@ curl http://localhost:8080/health
 
 ```bash
 # Send a message
-http POST http://localhost:8080/api/v1/send_message \
+http POST http://localhost:8080/api/v1/messages/send \
   user_id=user123 \
   command=chat_message \
   content="Hello, World!" \
@@ -315,7 +342,7 @@ func main() {
     jsonData, _ := json.Marshal(message)
 
     resp, err := http.Post(
-        "http://localhost:8080/api/v1/send_message",
+        "http://localhost:8080/api/v1/messages/send",
         "application/json",
         bytes.NewBuffer(jsonData),
     )
