@@ -373,3 +373,5 @@ target/
 # VsCode
 .vscode/
 CMakeSettings.json
+CLAUDE.md
+

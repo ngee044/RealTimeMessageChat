@@ -336,6 +336,90 @@ auto Configurations::load() -> void
 	{
 		database_encryption_iv_ = message.at("database_encryption_iv").as_string().data();
 	}
+
+	// Validate configuration values
+	validate_configuration();
+}
+
+auto Configurations::validate_configuration() -> void
+{
+	// Validate thread pool counts
+	if (high_priority_count_ <= 0)
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid high_priority_count, using default: 3");
+		high_priority_count_ = 3;
+	}
+
+	if (normal_priority_count_ <= 0)
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid normal_priority_count, using default: 3");
+		normal_priority_count_ = 3;
+	}
+
+	if (low_priority_count_ <= 0)
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid low_priority_count, using default: 5");
+		low_priority_count_ = 5;
+	}
+
+	// Validate buffer size
+	if (buffer_size_ < 1024)
+	{
+		Logger::handle().write(LogTypes::Information, "Buffer size too small, using minimum: 1024");
+		buffer_size_ = 1024;
+	}
+
+	if (buffer_size_ > 1048576)  // 1MB max
+	{
+		Logger::handle().write(LogTypes::Information, "Buffer size too large, using maximum: 1048576");
+		buffer_size_ = 1048576;
+	}
+
+	// Validate Redis port
+	if (use_redis_ && (redis_port_ <= 0 || redis_port_ > 65535))
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid redis_port, using default: 6379");
+		redis_port_ = 6379;
+	}
+
+	// Validate RabbitMQ port
+	if (rabbit_mq_port_ <= 0 || rabbit_mq_port_ > 65535)
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid rabbit_mq_port, using default: 5672");
+		rabbit_mq_port_ = 5672;
+	}
+
+	// Validate Redis TTL
+	if (redis_ttl_sec_ <= 0)
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid redis_ttl_sec, using default: 3600");
+		redis_ttl_sec_ = 3600;
+	}
+
+	// Validate write interval
+	if (write_interval_ < 100)
+	{
+		Logger::handle().write(LogTypes::Information, "Write interval too small, using minimum: 100");
+		write_interval_ = 100;
+	}
+
+	// Validate encryption key if encryption is enabled
+	if (database_encryption_enabled_)
+	{
+		if (database_encryption_key_.empty() || database_encryption_iv_.empty())
+		{
+			Logger::handle().write(LogTypes::Error,
+				"Database encryption enabled but key/IV is empty, disabling encryption");
+			database_encryption_enabled_ = false;
+		}
+	}
+
+	// Validate queue name
+	if (consume_queue_name_.empty())
+	{
+		Logger::handle().write(LogTypes::Information, "consume_queue_name is empty, using default: message_queue");
+		consume_queue_name_ = "message_queue";
+	}
 }
 
 auto Configurations::parse(ArgumentParser& arguments) -> void

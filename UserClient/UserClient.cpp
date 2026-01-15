@@ -56,6 +56,9 @@ auto UserClient::start() -> std::tuple<bool, std::optional<std::string>>
 
 	client_->wait_stop();
 
+	// Properly stop thread pool after client stops
+	destroy_thread_pool();
+
 	return { true, std::nullopt };
 }
 
@@ -158,8 +161,44 @@ auto UserClient::received_connection(const bool& condition, const bool& by_itsel
 
 	if (!condition)
 	{
-		client_->stop();
-		return { false, "received condition message from Server" };
+		// Connection lost - attempt reconnection if not stopped by itself
+		if (!by_itself)
+		{
+			Logger::handle().write(LogTypes::Information, "Connection lost, attempting reconnection...");
+
+			// Schedule reconnection attempt in thread pool
+			if (thread_pool_ != nullptr)
+			{
+				constexpr int reconnect_delay_sec = 5;
+				constexpr int max_reconnect_attempts = 10;
+
+				thread_pool_->push(
+					std::make_shared<Job>(JobPriorities::High,
+						[this, reconnect_delay_sec, max_reconnect_attempts]() -> std::tuple<bool, std::optional<std::string>>
+						{
+							for (int attempt = 0; attempt < max_reconnect_attempts; ++attempt)
+							{
+								std::this_thread::sleep_for(std::chrono::seconds(reconnect_delay_sec));
+
+								Logger::handle().write(LogTypes::Information,
+									std::format("Reconnection attempt {}/{}", attempt + 1, max_reconnect_attempts));
+
+								if (client_ != nullptr && client_->start(configurations_->server_ip(),
+									configurations_->server_port(), configurations_->buffer_size()))
+								{
+									Logger::handle().write(LogTypes::Information, "Reconnection successful");
+									return { true, std::nullopt };
+								}
+							}
+
+							Logger::handle().write(LogTypes::Error,
+								std::format("Failed to reconnect after {} attempts", max_reconnect_attempts));
+							return { false, "Failed to reconnect" };
+						}, "reconnect_job"));
+			}
+		}
+
+		return { false, "Connection lost" };
 	}
 
 	auto job_pool = thread_pool_->job_pool();
@@ -176,7 +215,7 @@ auto UserClient::received_connection(const bool& condition, const bool& by_itsel
 
 		{ "command", "request_client_status_update" }
 	};
-	
+
 	return client_->send_message(boost::json::serialize(message));
 }
 

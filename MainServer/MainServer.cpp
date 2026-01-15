@@ -351,10 +351,16 @@ auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std:
 #endif
 
 	auto job_pool = thread_pool_->job_pool();
-	if (job_pool == nullptr || job_pool->lock())
+	if (job_pool == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "job_pool is null");
 		return { false, "job_pool is null" };
+	}
+
+	if (!job_pool->lock())
+	{
+		Logger::handle().write(LogTypes::Error, "Failed to lock job_pool");
+		return { false, "Failed to lock job_pool" };
 	}
 
 #ifdef _DEBUG
@@ -373,11 +379,27 @@ auto MainServer::consume_message_queue() -> std::tuple<bool, std::optional<std::
 	{
 		return { true, std::nullopt };
 	}
-	
+
 	if (redis_client_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "redis_client is null");
 		return { false, "redis_client is null" };
+	}
+
+	// Check Redis connection and attempt reconnection if needed
+	if (!redis_client_->is_connected())
+	{
+		Logger::handle().write(LogTypes::Information, "Redis disconnected, attempting reconnection...");
+
+		auto [reconnected, reconnect_error] = redis_client_->connect();
+		if (!reconnected)
+		{
+			Logger::handle().write(LogTypes::Error,
+				std::format("Redis reconnection failed: {}", reconnect_error.value_or("Unknown error")));
+			return { false, "Redis reconnection failed" };
+		}
+
+		Logger::handle().write(LogTypes::Information, "Redis reconnection successful");
 	}
 
 	// static redis key polling
@@ -450,14 +472,20 @@ auto MainServer::check_global_message()-> std::tuple<bool, std::optional<std::st
 	}
 
 	auto job_pool = thread_pool_->job_pool();
-	if (job_pool == nullptr || job_pool->lock())
+	if (job_pool == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "job_pool is null");
 		return { false, "job_pool is null" };
 	}
 
+	if (!job_pool->lock())
+	{
+		Logger::handle().write(LogTypes::Error, "Failed to lock job_pool");
+		return { false, "Failed to lock job_pool" };
+	}
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	
+
 	job_pool->push(
 		std::make_shared<Job>(JobPriorities::High, std::bind(&MainServer::check_global_message, this), "check_global_message"));
 
@@ -472,13 +500,35 @@ auto MainServer::request_client_status_update(const std::string& id, const std::
 		return { false, "server is null" };
 	}
 
-	boost::json::object received_message = boost::json::parse(message).as_object();
-
-	// JSON validation
+	// JSON parsing with exception handling
+	boost::json::object received_message;
+	try
+	{
+		auto parsed = boost::json::parse(message);
+		if (!parsed.is_object())
+		{
+			Logger::handle().write(LogTypes::Error, std::format("Message is not a JSON object: {}", message));
+			return { false, "Message is not a JSON object" };
+		}
+		received_message = parsed.as_object();
+	}
+	catch (const std::exception& e)
+	{
+		Logger::handle().write(LogTypes::Error, std::format("JSON parsing failed: {}", e.what()));
+		return { false, std::format("JSON parsing failed: {}", e.what()) };
+	}
 
 	Logger::handle().write(LogTypes::Information, std::format("Received message: {}", message));
 
-	redis_client_->set(id + "_" + sub_id, message, configurations_->redis_ttl_sec());
+	// Null pointer check for redis_client_
+	if (redis_client_ == nullptr)
+	{
+		Logger::handle().write(LogTypes::Information, "Redis client is not initialized, skipping status update to Redis");
+	}
+	else
+	{
+		redis_client_->set(id + "::" + sub_id, message, configurations_->redis_ttl_sec());
+	}
 
 	boost::json::object message_object =
 	{

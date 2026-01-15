@@ -138,11 +138,32 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 	}
 	Logger::handle().write(LogTypes::Information, "work queue consume started");
 
-	std::tie(result, error_message) = work_queue_consume_->connect(60);
-	if (!result)
+	// Connect with retry logic
+	constexpr int max_retries = 5;
+	constexpr int retry_delay_sec = 5;
+	bool connected = false;
+
+	for (int retry = 0; retry < max_retries; ++retry)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to connect work queue consume: {}", error_message.value()));
-		return { false, std::format("Failed to connect work queue consume: {}", error_message.value()) };
+		std::tie(result, error_message) = work_queue_consume_->connect(60);
+		if (result)
+		{
+			connected = true;
+			break;
+		}
+
+		if (retry < max_retries - 1)
+		{
+			Logger::handle().write(LogTypes::Information,
+				std::format("RabbitMQ connection failed, retry {}/{} in {} seconds...", retry + 1, max_retries, retry_delay_sec));
+			std::this_thread::sleep_for(std::chrono::seconds(retry_delay_sec));
+		}
+	}
+
+	if (!connected)
+	{
+		Logger::handle().write(LogTypes::Error, std::format("Failed to connect work queue consume after {} retries: {}", max_retries, error_message.value_or("Unknown error")));
+		return { false, std::format("Failed to connect work queue consume after {} retries", max_retries) };
 	}
 	Logger::handle().write(LogTypes::Information, "work queue consume connected");
 
@@ -285,77 +306,102 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 		return { false, std::format("cannot prepare consume: {}", prepare_error.value()) };
 	}
 
-	auto [consume_register, consume_error] = work_queue_consume_->register_consume(work_queue_channel_id_, configurations_->consume_queue_name(), 
+	auto [consume_register, consume_error] = work_queue_consume_->register_consume(work_queue_channel_id_, configurations_->consume_queue_name(),
 		[&](const std::string& queue_name, const std::string& message, const std::string& message_type)-> std::tuple<bool, std::optional<std::string>>
 		{
-			// TODO 
-			// log type: sequence
-			Logger::handle().write(LogTypes::Information, std::format("consume message: queue_name[{}] => {}", queue_name, message));
-
-			auto message_value = boost::json::parse(message);
-			if (!message_value.is_object())
+			try
 			{
-				Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
-				return { false, "Failed to parse message" };
-			}
+				Logger::handle().write(LogTypes::Sequence, std::format("consume message: queue_name[{}] => {}", queue_name, message));
 
-			auto received_message = message_value.as_object();
-			if (!received_message.contains("id") || !received_message.at("id").is_string())
-			{
-				Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
-				return { false, "Failed to parse message" };
-			}
-
-			if (!received_message.contains("sub_id") || !received_message.at("sub_id").is_string())
-			{
-				Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
-				return { false, "Failed to parse message" };
-			}
-
-			if (!received_message.contains("message") || !received_message.at("message").is_object())
-			{
-				Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
-				return { false, "Failed to parse message" };
-			}
-
-			// Store message in Redis for MainServer to broadcast
-			redis_client_->set(configurations_->global_message_key(), message);
-
-			// Store message in database asynchronously if database is enabled
-			if (configurations_->use_database() && db_client_ != nullptr)
-			{
+				// JSON parsing with exception handling
+				boost::json::value message_value;
 				try
 				{
-					auto db_worker = std::make_shared<Database::DBWorker>(
-						db_client_,
-						message,
-						configurations_->database_encryption_enabled(),
-						configurations_->database_encryption_key(),
-						configurations_->database_encryption_iv(),
-						Thread::JobPriorities::Low
-					);
-
-					auto [push_success, push_error] = thread_pool_->push(db_worker);
-					if (!push_success)
-					{
-						Logger::handle().write(LogTypes::Error,
-							std::format("Failed to push DBWorker to thread pool: {}", push_error.value_or("Unknown error")));
-						// Don't return error - database storage is non-critical
-					}
-					else
-					{
-						Logger::handle().write(LogTypes::Information, "DBWorker job pushed to thread pool");
-					}
+					message_value = boost::json::parse(message);
 				}
 				catch (const std::exception& e)
 				{
-					Logger::handle().write(LogTypes::Error,
-						std::format("Exception creating DBWorker: {}", e.what()));
-					// Don't return error - database storage is non-critical
+					Logger::handle().write(LogTypes::Error, std::format("JSON parsing failed: {}", e.what()));
+					return { false, std::format("JSON parsing failed: {}", e.what()) };
 				}
-			}
 
-			return { true, std::nullopt };
+				if (!message_value.is_object())
+				{
+					Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
+					return { false, "Failed to parse message" };
+				}
+
+				auto received_message = message_value.as_object();
+				if (!received_message.contains("id") || !received_message.at("id").is_string())
+				{
+					Logger::handle().write(LogTypes::Error, std::format("Message missing 'id' field: {}", message));
+					return { false, "Message missing 'id' field" };
+				}
+
+				if (!received_message.contains("sub_id") || !received_message.at("sub_id").is_string())
+				{
+					Logger::handle().write(LogTypes::Error, std::format("Message missing 'sub_id' field: {}", message));
+					return { false, "Message missing 'sub_id' field" };
+				}
+
+				if (!received_message.contains("message") || !received_message.at("message").is_object())
+				{
+					Logger::handle().write(LogTypes::Error, std::format("Message missing 'message' field: {}", message));
+					return { false, "Message missing 'message' field" };
+				}
+
+				// Store message in Redis for MainServer to broadcast
+				if (redis_client_ != nullptr)
+				{
+					redis_client_->set(configurations_->global_message_key(), message);
+				}
+				else
+				{
+					Logger::handle().write(LogTypes::Error, "Redis client is null, cannot store message");
+					return { false, "Redis client is null" };
+				}
+
+				// Store message in database asynchronously if database is enabled
+				if (configurations_->use_database() && db_client_ != nullptr)
+				{
+					try
+					{
+						auto db_worker = std::make_shared<Database::DBWorker>(
+							db_client_,
+							message,
+							configurations_->database_encryption_enabled(),
+							configurations_->database_encryption_key(),
+							configurations_->database_encryption_iv(),
+							Thread::JobPriorities::Low
+						);
+
+						auto [push_success, push_error] = thread_pool_->push(db_worker);
+						if (!push_success)
+						{
+							Logger::handle().write(LogTypes::Error,
+								std::format("Failed to push DBWorker to thread pool: {}", push_error.value_or("Unknown error")));
+							// Don't return error - database storage is non-critical
+						}
+						else
+						{
+							Logger::handle().write(LogTypes::Information, "DBWorker job pushed to thread pool");
+						}
+					}
+					catch (const std::exception& e)
+					{
+						Logger::handle().write(LogTypes::Error,
+							std::format("Exception creating DBWorker: {}", e.what()));
+						// Don't return error - database storage is non-critical
+					}
+				}
+
+				return { true, std::nullopt };
+			}
+			catch (const std::exception& e)
+			{
+				Logger::handle().write(LogTypes::Error, std::format("Consume callback exception: {}", e.what()));
+				return { false, std::format("Consume callback exception: {}", e.what()) };
+			}
 		});
 
 	if (!consume_register)

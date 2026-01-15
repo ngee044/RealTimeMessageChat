@@ -146,6 +146,58 @@ auto Configurations::load() -> void
 	{
 		server_port_ = static_cast<int>(message.at("main_server_port").as_int64());
 	}
+
+	// Validate configuration values
+	validate_configuration();
+}
+
+auto Configurations::validate_configuration() -> void
+{
+	// Validate thread pool counts
+	if (high_priority_count_ <= 0)
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid high_priority_count, using default: 3");
+		high_priority_count_ = 3;
+	}
+
+	if (normal_priority_count_ <= 0)
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid normal_priority_count, using default: 3");
+		normal_priority_count_ = 3;
+	}
+
+	if (low_priority_count_ <= 0)
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid low_priority_count, using default: 5");
+		low_priority_count_ = 5;
+	}
+
+	// Validate buffer size
+	if (buffer_size_ < 1024)
+	{
+		Logger::handle().write(LogTypes::Information, "Buffer size too small, using minimum: 1024");
+		buffer_size_ = 1024;
+	}
+
+	if (buffer_size_ > 1048576)  // 1MB max
+	{
+		Logger::handle().write(LogTypes::Information, "Buffer size too large, using maximum: 1048576");
+		buffer_size_ = 1048576;
+	}
+
+	// Validate server port
+	if (server_port_ <= 0 || server_port_ > 65535)
+	{
+		Logger::handle().write(LogTypes::Information, "Invalid server_port, using default: 9876");
+		server_port_ = 9876;
+	}
+
+	// Validate write interval
+	if (write_interval_ < 100)
+	{
+		Logger::handle().write(LogTypes::Information, "Write interval too small, using minimum: 100");
+		write_interval_ = 100;
+	}
 }
 
 auto Configurations::parse(ArgumentParser& arguments) -> void

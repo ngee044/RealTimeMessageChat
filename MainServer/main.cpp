@@ -19,6 +19,8 @@ std::shared_ptr<MainServer> server_ = nullptr;
 
 auto main(int argc, char* argv[]) -> int
 {
+	register_signal();
+
 	configurations_ = std::make_shared<Configurations>(ArgumentParser(argc, argv));
 
 	Logger::handle().file_mode(configurations_->write_file());
@@ -46,6 +48,8 @@ auto main(int argc, char* argv[]) -> int
 
 	Logger::handle().stop();
 	Logger::destroy();
+
+	deregister_signal();
 
 	return 0;
 }
@@ -79,6 +83,6 @@ void signal_callback(int32_t signum)
 		return;
 	}
 
-	Logger::handle().write(LogTypes::Information, std::format("attempt to stop AudioCalculator from signal {}", signum));
+	Logger::handle().write(LogTypes::Information, std::format("attempt to stop MainServer from signal {}", signum));
 	server_->stop();
 }

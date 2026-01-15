@@ -36,6 +36,7 @@ public:
 protected:
 	auto load() -> void;
 	auto parse(ArgumentParser& arguments) -> void;
+	auto validate_configuration() -> void;
 
 private:
 	LogTypes write_file_;

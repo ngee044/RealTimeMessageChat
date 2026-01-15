@@ -48,9 +48,10 @@ auto UserClientManager::remove(const std::string& id, const std::string& sub_id)
 	return { true, std::nullopt };
 }
 
-auto UserClientManager::clinets() -> const std::map<std::tuple<std::string, std::string>, std::tuple<std::string, std::string>>&
+auto UserClientManager::clinets() -> std::map<std::tuple<std::string, std::string>, std::tuple<std::string, std::string>>
 {
-	return clients_;
+	std::scoped_lock lock(mutex_);
+	return clients_;  // Return a copy for thread safety
 }
 
 #pragma region Handle
