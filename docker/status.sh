@@ -18,25 +18,41 @@ echo "=========================================="
 # Check RabbitMQ
 echo -n "RabbitMQ: "
 if docker exec rabbitmq rabbitmq-diagnostics ping &>/dev/null; then
-    echo "OK"
+    echo "✓ OK"
 else
-    echo "NOT READY"
+    echo "✗ NOT READY"
 fi
 
 # Check Redis
 echo -n "Redis: "
 if docker exec redis redis-cli ping &>/dev/null; then
-    echo "OK"
+    echo "✓ OK"
 else
-    echo "NOT READY"
+    echo "✗ NOT READY"
+fi
+
+# Check PostgreSQL
+echo -n "PostgreSQL: "
+if docker exec postgres pg_isready -U rtmc_user -d rtmc &>/dev/null; then
+    echo "✓ OK"
+else
+    echo "✗ NOT READY"
 fi
 
 # Check MainServer port
 echo -n "MainServer (port 9876): "
 if nc -z localhost 9876 &>/dev/null; then
-    echo "OK"
+    echo "✓ OK"
 else
-    echo "NOT READY"
+    echo "✗ NOT READY"
+fi
+
+# Check API Server
+echo -n "API Server (port 8080): "
+if curl -s http://localhost:8080/health &>/dev/null; then
+    echo "✓ OK"
+else
+    echo "✗ NOT READY"
 fi
 
 echo ""

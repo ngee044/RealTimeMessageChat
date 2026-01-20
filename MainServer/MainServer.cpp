@@ -36,9 +36,18 @@ MainServer::MainServer(std::shared_ptr<Configurations> configurations)
 
 MainServer::~MainServer(void)
 {
-	stop();
-
 	destroy_thread_pool();
+
+	if (server_ != nullptr)
+	{
+		server_->stop();
+		server_.reset();
+	}
+
+	if (redis_client_ != nullptr)
+	{
+		redis_client_.reset();
+	}
 }
 
 auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
@@ -112,7 +121,6 @@ auto MainServer::stop() -> void
 	}
 
 	server_->stop();
-	server_.reset();
 }
 
 auto MainServer::wait_stop() -> std::tuple<bool, std::optional<std::string>>
