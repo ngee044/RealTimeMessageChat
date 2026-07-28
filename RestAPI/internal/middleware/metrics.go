@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"strconv"
 	"time"
 
@@ -66,25 +67,6 @@ var (
 		[]string{"queue", "status"},
 	)
 
-	// Database query counter
-	databaseQueriesTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "database_queries_total",
-			Help: "Total number of database queries",
-		},
-		[]string{"operation", "status"},
-	)
-
-	// Database query duration histogram
-	databaseQueryDuration = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "database_query_duration_seconds",
-			Help:    "Database query duration in seconds",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"operation"},
-	)
-
 	// Redis operations counter
 	redisOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -145,15 +127,27 @@ func PrometheusMetrics() gin.HandlerFunc {
 }
 
 // computeApproximateRequestSize estimates the size of the HTTP request
-func computeApproximateRequestSize(r interface{}) int {
-	// Type assertion to get the actual request
-	req, ok := r.(*interface{})
-	if !ok {
+func computeApproximateRequestSize(r *http.Request) int {
+	if r == nil {
 		return 0
 	}
-	_ = req
-	// Simplified estimation
-	return 1024 // Placeholder
+
+	size := len(r.Method) + len(r.Proto) + len(r.Host)
+	if r.URL != nil {
+		size += len(r.URL.String())
+	}
+
+	for name, values := range r.Header {
+		for _, value := range values {
+			size += len(name) + len(value)
+		}
+	}
+
+	if r.ContentLength > 0 {
+		size += int(r.ContentLength)
+	}
+
+	return size
 }
 
 // RecordRabbitMQPublish records a RabbitMQ message publish
@@ -163,16 +157,6 @@ func RecordRabbitMQPublish(queue string, success bool) {
 		status = "error"
 	}
 	rabbitmqMessagesPublished.WithLabelValues(queue, status).Inc()
-}
-
-// RecordDatabaseQuery records a database query
-func RecordDatabaseQuery(operation string, duration time.Duration, err error) {
-	status := "success"
-	if err != nil {
-		status = "error"
-	}
-	databaseQueriesTotal.WithLabelValues(operation, status).Inc()
-	databaseQueryDuration.WithLabelValues(operation).Observe(duration.Seconds())
 }
 
 // RecordRedisOperation records a Redis operation

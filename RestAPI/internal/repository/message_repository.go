@@ -10,18 +10,21 @@ import (
 )
 
 // Message represents a message in the database
+// Message mirrors the messages table defined in database/schema.sql.
+// 생산자는 두 곳이다 — CommonModule/DBWorker(C++) 가 INSERT 하고 이 리포지토리가 조회·전이한다.
 type Message struct {
-	ID          int64          `db:"id" json:"id"`
-	MessageID   string         `db:"message_id" json:"message_id"`
-	UserID      string         `db:"user_id" json:"user_id"`
-	Command     string         `db:"command" json:"command"`
-	SubID       sql.NullString `db:"sub_id" json:"sub_id,omitempty"`
-	Content     string         `db:"content" json:"content"`
-	Metadata    []byte         `db:"metadata" json:"metadata,omitempty"` // JSONB stored as bytes
-	Priority    int            `db:"priority" json:"priority"`
-	Status      string         `db:"status" json:"status"`
-	CreatedAt   time.Time      `db:"created_at" json:"created_at"`
-	ProcessedAt sql.NullTime   `db:"processed_at" json:"processed_at,omitempty"`
+	ID            int64        `db:"id" json:"id"`
+	MessageID     string       `db:"message_id" json:"message_id"`
+	UserID        string       `db:"user_id" json:"user_id"`
+	SubID         string       `db:"sub_id" json:"sub_id"`
+	Command       string       `db:"command" json:"command"`
+	PublisherInfo string       `db:"publisher_info" json:"publisher_info"`
+	ServerName    string       `db:"server_name" json:"server_name"`
+	Content       string       `db:"content" json:"content"`
+	IsEncrypted   bool         `db:"is_encrypted" json:"is_encrypted"`
+	Status        string       `db:"status" json:"status"`
+	CreatedAt     time.Time    `db:"created_at" json:"created_at"`
+	ProcessedAt   sql.NullTime `db:"processed_at" json:"processed_at,omitempty"`
 }
 
 // MessageRepository defines message data access methods
@@ -53,24 +56,24 @@ func NewMessageRepository(db *sqlx.DB) MessageRepository {
 // Create creates a new message
 func (r *messageRepository) Create(ctx context.Context, message *Message) error {
 	query := `
-		INSERT INTO messages (message_id, user_id, command, sub_id, content, metadata, priority, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO messages (message_id, user_id, sub_id, command, publisher_info, server_name, content, is_encrypted, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at
 	`
 
 	return r.db.QueryRowxContext(
 		ctx, query,
-		message.MessageID, message.UserID, message.Command,
-		message.SubID, message.Content, message.Metadata,
-		message.Priority, message.Status,
+		message.MessageID, message.UserID, message.SubID, message.Command,
+		message.PublisherInfo, message.ServerName, message.Content,
+		message.IsEncrypted, message.Status,
 	).Scan(&message.ID, &message.CreatedAt)
 }
 
 // GetByMessageID retrieves a message by message_id
 func (r *messageRepository) GetByMessageID(ctx context.Context, messageID string) (*Message, error) {
 	query := `
-		SELECT id, message_id, user_id, command, sub_id, content, metadata,
-		       priority, status, created_at, processed_at
+		SELECT id, message_id, user_id, sub_id, command, publisher_info,
+		       server_name, content, is_encrypted, status, created_at, processed_at
 		FROM messages
 		WHERE message_id = $1
 	`
@@ -86,8 +89,8 @@ func (r *messageRepository) GetByMessageID(ctx context.Context, messageID string
 // GetByID retrieves a message by ID
 func (r *messageRepository) GetByID(ctx context.Context, id int64) (*Message, error) {
 	query := `
-		SELECT id, message_id, user_id, command, sub_id, content, metadata,
-		       priority, status, created_at, processed_at
+		SELECT id, message_id, user_id, sub_id, command, publisher_info,
+		       server_name, content, is_encrypted, status, created_at, processed_at
 		FROM messages
 		WHERE id = $1
 	`
@@ -153,8 +156,8 @@ func (r *messageRepository) MarkAsProcessed(ctx context.Context, messageID strin
 // ListByUser retrieves messages for a specific user
 func (r *messageRepository) ListByUser(ctx context.Context, userID string, limit, offset int) ([]*Message, error) {
 	query := `
-		SELECT id, message_id, user_id, command, sub_id, content, metadata,
-		       priority, status, created_at, processed_at
+		SELECT id, message_id, user_id, sub_id, command, publisher_info,
+		       server_name, content, is_encrypted, status, created_at, processed_at
 		FROM messages
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -169,8 +172,8 @@ func (r *messageRepository) ListByUser(ctx context.Context, userID string, limit
 // ListByStatus retrieves messages by status
 func (r *messageRepository) ListByStatus(ctx context.Context, status string, limit, offset int) ([]*Message, error) {
 	query := `
-		SELECT id, message_id, user_id, command, sub_id, content, metadata,
-		       priority, status, created_at, processed_at
+		SELECT id, message_id, user_id, sub_id, command, publisher_info,
+		       server_name, content, is_encrypted, status, created_at, processed_at
 		FROM messages
 		WHERE status = $1
 		ORDER BY created_at DESC
@@ -185,8 +188,8 @@ func (r *messageRepository) ListByStatus(ctx context.Context, status string, lim
 // ListRecent retrieves recent messages
 func (r *messageRepository) ListRecent(ctx context.Context, limit, offset int) ([]*Message, error) {
 	query := `
-		SELECT id, message_id, user_id, command, sub_id, content, metadata,
-		       priority, status, created_at, processed_at
+		SELECT id, message_id, user_id, sub_id, command, publisher_info,
+		       server_name, content, is_encrypted, status, created_at, processed_at
 		FROM messages
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
@@ -243,43 +246,4 @@ func (r *messageRepository) CountByStatus(ctx context.Context, status string) (i
 	var count int64
 	err := r.db.GetContext(ctx, &count, query, status)
 	return count, err
-}
-
-// Ensure metadata is properly handled for JSONB
-func (m *Message) SetMetadata(data []byte) {
-	m.Metadata = data
-}
-
-// GetMetadata returns metadata as bytes
-func (m *Message) GetMetadata() []byte {
-	if m.Metadata == nil {
-		return []byte("{}")
-	}
-	return m.Metadata
-}
-
-// Scan implements sql.Scanner for JSONB fields
-func (m *Message) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-
-	switch v := value.(type) {
-	case []byte:
-		m.Metadata = v
-	case string:
-		m.Metadata = []byte(v)
-	default:
-		return fmt.Errorf("unsupported type for metadata: %T", value)
-	}
-
-	return nil
-}
-
-// Value implements driver.Valuer for JSONB fields
-func (m Message) Value() (interface{}, error) {
-	if m.Metadata == nil {
-		return "{}", nil
-	}
-	return m.Metadata, nil
 }

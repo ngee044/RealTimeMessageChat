@@ -13,20 +13,28 @@ type SystemHandler struct {
 	rabbitMQ *services.RabbitMQService
 	redis    *services.RedisService
 	db       *services.DatabaseService
-	version  string
+	// dbRequired 는 설정상 PostgreSQL 이 활성인지를 뜻한다. db 가 nil 인 이유가
+	// '비활성'인지 '초기화 실패'인지 구분해야 degrade 상태를 healthy 로 오보고하지 않는다.
+	dbRequired    bool
+	redisRequired bool
+	version       string
 }
 
 func NewSystemHandler(
 	rabbitMQ *services.RabbitMQService,
 	redis *services.RedisService,
 	db *services.DatabaseService,
+	dbRequired bool,
+	redisRequired bool,
 	version string,
 ) *SystemHandler {
 	return &SystemHandler{
-		rabbitMQ: rabbitMQ,
-		redis:    redis,
-		db:       db,
-		version:  version,
+		rabbitMQ:      rabbitMQ,
+		redis:         redis,
+		db:            db,
+		dbRequired:    dbRequired,
+		redisRequired: redisRequired,
+		version:       version,
 	}
 }
 
@@ -39,13 +47,14 @@ func NewSystemHandler(
 // @Router /health [get]
 func (h *SystemHandler) Health(c *gin.Context) {
 	rabbitMQHealthy := h.rabbitMQ.IsHealthy()
-	redisHealthy := true
-	dbHealthy := true
 
+	// 활성으로 설정됐는데 인스턴스가 nil 이면 초기화가 실패한 상태이므로 unhealthy 다.
+	redisHealthy := !h.redisRequired
 	if h.redis != nil {
 		redisHealthy = h.redis.IsHealthy(c.Request.Context())
 	}
 
+	dbHealthy := !h.dbRequired
 	if h.db != nil {
 		dbHealthy = h.db.IsHealthy()
 	}

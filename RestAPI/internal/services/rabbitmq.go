@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/config"
+	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/middleware"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/pkg/logger"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // RabbitMQService handles RabbitMQ operations
@@ -74,8 +75,16 @@ func (s *RabbitMQService) connect() error {
 		return fmt.Errorf("failed to create channel: %w", err)
 	}
 
+	// Publisher confirm 을 켜지 않으면 Publish 는 소켓에 프레임을 쓴 것까지만 보장하므로
+	// 브로커가 메시지를 수락하지 않아도 핸들러가 200 을 반환한다.
+	if err := channel.Confirm(false); err != nil {
+		channel.Close()
+		conn.Close()
+		return fmt.Errorf("failed to enable publisher confirms: %w", err)
+	}
+
 	s.channel = channel
-	logger.Info("Successfully created RabbitMQ channel")
+	logger.Info("Successfully created RabbitMQ channel (publisher confirms enabled)")
 
 	// Declare queue
 	if err := s.declareQueue(); err != nil {
@@ -172,8 +181,9 @@ func (s *RabbitMQService) PublishWithPriority(ctx context.Context, message []byt
 		Priority:     priority,
 	}
 
-	err := s.channel.PublishWithContext(
-		ctx,
+	// amqp091-go 의 PublishWithContext 는 컨텍스트를 무시한다(channel.go 주석 명시).
+	// DeferredConfirmation.WaitContext 로 브로커 ack 을 기다려야 호출측 타임아웃이 실제로 적용된다.
+	confirmation, err := s.channel.PublishWithDeferredConfirm(
 		"",                 // exchange
 		s.config.QueueName, // routing key
 		false,              // mandatory
@@ -182,10 +192,23 @@ func (s *RabbitMQService) PublishWithPriority(ctx context.Context, message []byt
 	)
 
 	if err != nil {
+		middleware.RecordRabbitMQPublish(s.config.QueueName, false)
 		return fmt.Errorf("failed to publish message: %w", err)
 	}
 
-	logger.WithField("queue", s.config.QueueName).Debug("Message published successfully")
+	acked, err := confirmation.WaitContext(ctx)
+	if err != nil {
+		middleware.RecordRabbitMQPublish(s.config.QueueName, false)
+		return fmt.Errorf("failed to confirm message: %w", err)
+	}
+
+	if !acked {
+		middleware.RecordRabbitMQPublish(s.config.QueueName, false)
+		return fmt.Errorf("message was not acknowledged by broker")
+	}
+
+	middleware.RecordRabbitMQPublish(s.config.QueueName, true)
+	logger.WithField("queue", s.config.QueueName).Debug("Message published and confirmed")
 	return nil
 }
 

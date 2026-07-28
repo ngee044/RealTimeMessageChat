@@ -13,8 +13,8 @@ const (
 	TTLMessageStatus = 1 * time.Hour
 
 	// Session-related TTLs
-	TTLSession       = 24 * time.Hour
-	TTLRefreshToken  = 7 * 24 * time.Hour
+	TTLSession      = 24 * time.Hour
+	TTLRefreshToken = 7 * 24 * time.Hour
 
 	// Rate limiting TTLs
 	TTLRateLimit = 1 * time.Minute

@@ -148,21 +148,23 @@ func initializeApp(cfg *config.Config) *App {
 		}
 	}
 
-	// Initialize Database (optional)
+	// Initialize Database.
+	// database.enabled 로 활성화했는데 연결이나 스키마가 어긋난 상태로 기동하면,
+	// 확장 라우트 13개가 등록된 채 모든 쿼리가 500 을 내고 /health 도 이를 감추기 어렵다.
+	// '활성으로 설정했으면 반드시 사용 가능해야 한다' 로 계약을 고정한다.
 	var dbService *services.DatabaseService
 	if cfg.Database.Enabled {
 		db, err := services.NewDatabaseService(&cfg.Database)
 		if err != nil {
-			logger.Warnf("Failed to initialize database: %v. Continuing without database.", err)
-		} else {
-			dbService = db
-			app.db = db
-
-			// Initialize schema
-			if err := db.InitSchema(); err != nil {
-				logger.Warnf("Failed to initialize database schema: %v", err)
-			}
+			logger.Fatalf("Failed to initialize database: %v", err)
 		}
+
+		if err := db.VerifySchema(); err != nil {
+			logger.Fatalf("Database schema mismatch: %v", err)
+		}
+
+		dbService = db
+		app.db = db
 	}
 
 	// Initialize repositories
@@ -180,7 +182,7 @@ func initializeApp(cfg *config.Config) *App {
 	}
 
 	if messageRepo != nil {
-		app.messageService = service.NewMessageService(messageRepo, userRepo, rabbitMQ, redisService)
+		app.messageService = service.NewMessageService(messageRepo, redisService)
 	}
 
 	return app
@@ -190,22 +192,36 @@ func initializeApp(cfg *config.Config) *App {
 func setupRouter(cfg *config.Config, app *App) *gin.Engine {
 	router := gin.New()
 
+	// Gin 기본값은 모든 프록시를 신뢰하므로 c.ClientIP() 가 X-Forwarded-For 를 그대로 받아들여
+	// IP 기반 rate limit 이 헤더 위조로 우회된다. 신뢰 목록을 명시적으로 비워 원격 주소만 쓴다.
+	if err := router.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
+		logger.Fatalf("Failed to set trusted proxies: %v", err)
+	}
+
 	// Global middleware
 	router.Use(middleware.Recovery())
 	router.Use(middleware.RequestID())
 	router.Use(middleware.Logger())
 	router.Use(middleware.CORS())
 
-	systemHandler := handlers.NewSystemHandler(app.rabbitMQ, app.redis, app.db, version)
-
 	// Metrics middleware (if enabled)
 	if cfg.Metrics.Enabled {
 		router.Use(middleware.PrometheusMetrics())
-		router.GET(cfg.Metrics.Path, handlers.MetricsHandler())
 	}
 
-	// Rate limiting middleware
-	router.Use(middleware.RateLimitByIP(10, 20)) // 10 requests/sec, burst 20
+	// Rate limiting middleware.
+	// Gin 은 라우트 등록 시점에 핸들러 체인을 확정하므로, 모든 라우트에 적용되도록
+	// 첫 라우트 등록보다 앞에서 Use 해야 한다.
+	router.Use(middleware.RateLimitByIP(cfg.Server.RateLimitPerSecond, cfg.Server.RateLimitBurst))
+
+	systemHandler := handlers.NewSystemHandler(
+		app.rabbitMQ, app.redis, app.db,
+		cfg.Database.Enabled, cfg.Redis.Enabled, version,
+	)
+
+	if cfg.Metrics.Enabled {
+		router.GET(cfg.Metrics.Path, handlers.MetricsHandler())
+	}
 
 	// Health check endpoint
 	router.GET("/health", systemHandler.Health)

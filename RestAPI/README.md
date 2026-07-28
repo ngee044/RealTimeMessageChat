@@ -103,7 +103,7 @@ RestAPI/
        "port": 5672,
        "username": "guest",
        "password": "guest",
-       "queue_name": "message_queue"
+       "queue_name": "message_broadcast_queue"
      },
      "logging": {
        "level": "info",
@@ -199,7 +199,7 @@ Send a message to RabbitMQ for processing.
   "message_id": "550e8400-e29b-41d4-a716-446655440000",
   "message": "Message sent successfully",
   "data": {
-    "queue_name": "message_queue",
+    "queue_name": "message_broadcast_queue",
     "priority": 2
   },
   "timestamp": 1234567890

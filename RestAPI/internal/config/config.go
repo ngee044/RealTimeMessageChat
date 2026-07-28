@@ -28,6 +28,11 @@ type ServerConfig struct {
 	WriteTimeout    int    `json:"write_timeout_seconds"`
 	MaxHeaderBytes  int    `json:"max_header_bytes"`
 	ShutdownTimeout int    `json:"shutdown_timeout_seconds"`
+	// TrustedProxies 가 비어 있으면 어떤 프록시도 신뢰하지 않고 원격 주소를 그대로 클라이언트 IP 로 쓴다.
+	// 리버스 프록시 뒤에 둘 때만 해당 프록시 CIDR 을 넣는다.
+	TrustedProxies     []string `json:"trusted_proxies"`
+	RateLimitPerSecond float64  `json:"rate_limit_per_second"`
+	RateLimitBurst     int      `json:"rate_limit_burst"`
 }
 
 // RabbitMQConfig holds RabbitMQ connection and queue configuration
@@ -48,7 +53,7 @@ type RabbitMQConfig struct {
 
 // LoggingConfig holds logging configuration
 type LoggingConfig struct {
-	Level      string `json:"level"` // trace, debug, info, warn, error, fatal, panic
+	Level      string `json:"level"`  // trace, debug, info, warn, error, fatal, panic
 	Format     string `json:"format"` // json, text
 	OutputPath string `json:"output_path"`
 }
@@ -83,10 +88,10 @@ type DatabaseConfig struct {
 
 // AuthConfig holds authentication configuration
 type AuthConfig struct {
-	JWTSecret           string `json:"jwt_secret"`
-	JWTExpirationHours  int    `json:"jwt_expiration_hours"`
-	RefreshExpirationHours int `json:"refresh_expiration_hours"`
-	Enabled             bool   `json:"enabled"`
+	JWTSecret              string `json:"jwt_secret"`
+	JWTExpirationHours     int    `json:"jwt_expiration_hours"`
+	RefreshExpirationHours int    `json:"refresh_expiration_hours"`
+	Enabled                bool   `json:"enabled"`
 }
 
 // MetricsConfig holds metrics configuration
@@ -111,6 +116,8 @@ func LoadConfig(path string) (*Config, error) {
 
 	// Override with environment variables if present
 	config.loadFromEnv()
+
+	config.applyDefaults()
 
 	// Validate configuration
 	if err := config.Validate(); err != nil {
@@ -203,6 +210,22 @@ func (c *Config) loadFromEnv() {
 	// === Server configuration ===
 	if port, ok := getEnvInt("SERVER_PORT"); ok {
 		c.Server.Port = port
+	}
+}
+
+// applyDefaults fills in values that are safe to omit from the config file.
+// rate limit 값이 0 이면 모든 요청이 차단되므로 반드시 기본값을 채워야 한다.
+func (c *Config) applyDefaults() {
+	if c.Server.RateLimitPerSecond <= 0 {
+		c.Server.RateLimitPerSecond = 10
+	}
+
+	if c.Server.RateLimitBurst <= 0 {
+		c.Server.RateLimitBurst = 20
+	}
+
+	if c.Metrics.Enabled && c.Metrics.Path == "" {
+		c.Metrics.Path = "/metrics"
 	}
 }
 

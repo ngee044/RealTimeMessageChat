@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 
-	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/models"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/repository"
 )
 
@@ -20,7 +19,6 @@ type UserServiceInterface interface {
 
 // MessageServiceInterface defines the interface for message business logic
 type MessageServiceInterface interface {
-	SendMessage(ctx context.Context, req *models.MessageRequest) (string, error)
 	GetMessage(ctx context.Context, messageID string) (*repository.Message, error)
 	GetUserMessages(ctx context.Context, userID string, limit, offset int) ([]*repository.Message, int64, error)
 	GetRecentMessages(ctx context.Context, limit, offset int) ([]*repository.Message, int64, error)

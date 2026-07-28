@@ -98,10 +98,12 @@ func (s *UserService) UpdateUserStatus(ctx context.Context, userID, status strin
 		return apperrors.Wrap(err, apperrors.ErrCodeDatabaseError, "Failed to update status", 500)
 	}
 
-	// Update in cache
+	// 캐시는 best-effort 지만, 실패를 삼키면 갱신 전 상태가 TTL 동안 계속 조회되므로 남긴다.
 	if s.redis != nil {
 		cacheKey := cache.UserStatusKey(userID)
-		s.redis.Set(ctx, cacheKey, status, cache.TTLUserStatus)
+		if err := s.redis.Set(ctx, cacheKey, status, cache.TTLUserStatus); err != nil {
+			logger.Warnf("Failed to cache user status (%s): %v", userID, err)
+		}
 	}
 
 	logger.Infof("User status updated: %s -> %s", userID, status)
@@ -143,9 +145,11 @@ func (s *UserService) DeleteUser(ctx context.Context, userID string) error {
 		return apperrors.Wrap(err, apperrors.ErrCodeDatabaseError, "Failed to delete user", 500)
 	}
 
-	// Remove from cache
+	// 삭제 후 캐시가 남으면 없는 사용자가 계속 조회되므로 실패를 반드시 기록한다.
 	if s.redis != nil {
-		s.redis.Delete(ctx, cache.UserKey(userID), cache.UserStatusKey(userID))
+		if err := s.redis.Delete(ctx, cache.UserKey(userID), cache.UserStatusKey(userID)); err != nil {
+			logger.Warnf("Failed to evict user cache (%s): %v", userID, err)
+		}
 	}
 
 	logger.Infof("User deleted: %s", userID)

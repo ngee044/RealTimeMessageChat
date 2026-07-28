@@ -34,17 +34,34 @@ type ErrorResponse struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-// QueueMessage represents the message structure sent to RabbitMQ
-type QueueMessage struct {
-	ID        string                 `json:"id"`
-	UserID    string                 `json:"user_id"`
-	Command   string                 `json:"command"`
-	SubID     string                 `json:"sub_id,omitempty"`
-	Content   string                 `json:"content"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+// QueueMessagePayload is the nested "message" object of the canonical queue schema.
+// MainServerConsumer 는 message 가 object 일 것을 요구하고 MainServer·DBWorker 는
+// message.content 를 읽는다. docker/publish-message.sh 가 만드는 형식과 동일하다.
+type QueueMessagePayload struct {
+	Command string `json:"command"`
+	Content string `json:"content"`
+	// 소비측(Consumer/MainServer/DBWorker) 어디도 읽지 않는 발행측 진단용 필드다.
+	Timestamp string `json:"timestamp,omitempty"`
+}
+
+// QueuePublisherInformation carries producer-side metadata.
+// DBWorker 가 publisher_info TEXT 로 그대로 영속화하므로 message_id 추적성이 유지된다.
+type QueuePublisherInformation struct {
+	MessageID string                 `json:"message_id"`
+	Source    string                 `json:"source"`
 	Priority  int                    `json:"priority"`
-	Timestamp int64                  `json:"timestamp"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 	CreatedAt int64                  `json:"created_at"`
+}
+
+// QueueMessage represents the message structure sent to RabbitMQ.
+// id 는 사용자 식별자다 — database/schema.sql 과 DBWorker 가 그렇게 정의한다.
+// sub_id 는 Consumer 가 필수 문자열로 요구하므로 omitempty 를 쓰지 않는다.
+type QueueMessage struct {
+	ID                   string                    `json:"id"`
+	SubID                string                    `json:"sub_id"`
+	PublisherInformation QueuePublisherInformation `json:"publisher_information"`
+	Message              QueueMessagePayload       `json:"message"`
 }
 
 // Validate validates the message request
@@ -84,15 +101,21 @@ func (m *MessageRequest) ToQueueMessage(messageID string) *QueueMessage {
 	}
 
 	return &QueueMessage{
-		ID:        messageID,
-		UserID:    m.UserID,
-		Command:   m.Command,
-		SubID:     m.SubID,
-		Content:   m.Content,
-		Metadata:  m.Metadata,
-		Priority:  m.Priority,
-		Timestamp: timestamp,
-		CreatedAt: now,
+		ID:    m.UserID,
+		SubID: m.SubID,
+		PublisherInformation: QueuePublisherInformation{
+			MessageID: messageID,
+			Source:    "restapi",
+			Priority:  m.Priority,
+			Metadata:  m.Metadata,
+			CreatedAt: now,
+		},
+		Message: QueueMessagePayload{
+			Command: m.Command,
+			Content: m.Content,
+			// 셸 도구 2종(publish-message.sh, test-integration.sh)이 RFC3339 문자열을 쓰므로 형식을 맞춘다.
+			Timestamp: time.Unix(timestamp, 0).UTC().Format(time.RFC3339),
+		},
 	}
 }
 

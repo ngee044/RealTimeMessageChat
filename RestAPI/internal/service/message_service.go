@@ -2,11 +2,7 @@ package service
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 
-	"github.com/google/uuid"
-	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/models"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/repository"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/services"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/pkg/cache"
@@ -17,88 +13,18 @@ import (
 // MessageService handles message business logic
 type MessageService struct {
 	messageRepo repository.MessageRepository
-	userRepo    repository.UserRepository
-	rabbitMQ    *services.RabbitMQService
 	redis       *services.RedisService
 }
 
 // NewMessageService creates a new message service
 func NewMessageService(
 	messageRepo repository.MessageRepository,
-	userRepo repository.UserRepository,
-	rabbitMQ *services.RabbitMQService,
 	redis *services.RedisService,
 ) *MessageService {
 	return &MessageService{
 		messageRepo: messageRepo,
-		userRepo:    userRepo,
-		rabbitMQ:    rabbitMQ,
 		redis:       redis,
 	}
-}
-
-// SendMessage sends a message through RabbitMQ and stores it in the database
-func (s *MessageService) SendMessage(ctx context.Context, req *models.MessageRequest) (string, error) {
-	// Validate request
-	if err := req.Validate(); err != nil {
-		return "", apperrors.Wrap(err, apperrors.ErrCodeValidation, "Validation failed", 400)
-	}
-
-	// Generate message ID
-	messageID := uuid.New().String()
-
-	// Convert to queue message
-	queueMsg := req.ToQueueMessage(messageID)
-
-	// Serialize to JSON
-	msgBytes, err := queueMsg.ToJSON()
-	if err != nil {
-		logger.Errorf("Failed to serialize message: %v", err)
-		return "", apperrors.Wrap(err, apperrors.ErrCodeInternal, "Failed to process message", 500)
-	}
-
-	// Store in database
-	dbMessage := &repository.Message{
-		MessageID: messageID,
-		UserID:    req.UserID,
-		Command:   req.Command,
-		SubID:     sql.NullString{String: req.SubID, Valid: req.SubID != ""},
-		Content:   req.Content,
-		Priority:  req.Priority,
-		Status:    "pending",
-	}
-
-	// Set metadata if provided
-	if req.Metadata != nil {
-		metadataBytes, err := json.Marshal(req.Metadata)
-		if err == nil {
-			dbMessage.Metadata = metadataBytes
-		}
-	}
-
-	if err := s.messageRepo.Create(ctx, dbMessage); err != nil {
-		logger.Errorf("Failed to store message in database: %v", err)
-		return "", apperrors.Wrap(err, apperrors.ErrCodeDatabaseError, "Failed to store message", 500)
-	}
-
-	// Publish to RabbitMQ
-	if err := s.rabbitMQ.Publish(ctx, msgBytes); err != nil {
-		logger.Errorf("Failed to publish message to RabbitMQ: %v", err)
-		// Update message status to failed
-		s.messageRepo.UpdateStatus(ctx, messageID, "failed")
-		return "", apperrors.Wrap(err, apperrors.ErrCodeQueueError, "Failed to send message", 500)
-	}
-
-	// Update message status to sent
-	s.messageRepo.UpdateStatus(ctx, messageID, "sent")
-
-	// Update user's last seen
-	if s.userRepo != nil {
-		s.userRepo.UpdateLastSeen(ctx, req.UserID)
-	}
-
-	logger.Infof("Message sent successfully: %s (user: %s, command: %s)", messageID, req.UserID, req.Command)
-	return messageID, nil
 }
 
 // GetMessage retrieves a message by ID
@@ -170,9 +96,11 @@ func (s *MessageService) UpdateMessageStatus(ctx context.Context, messageID, sta
 		return apperrors.Wrap(err, apperrors.ErrCodeDatabaseError, "Failed to update message status", 500)
 	}
 
-	// Cache the status update in Redis
+	// 캐시는 best-effort 지만, 실패를 삼키면 갱신 전 값이 TTL 동안 계속 조회되므로 남긴다.
 	if s.redis != nil {
-		s.redis.Set(ctx, cache.MessageStatusKey(messageID), status, cache.TTLMessageStatus)
+		if err := s.redis.Set(ctx, cache.MessageStatusKey(messageID), status, cache.TTLMessageStatus); err != nil {
+			logger.Warnf("Failed to cache message status (%s): %v", messageID, err)
+		}
 	}
 
 	return nil
@@ -196,9 +124,11 @@ func (s *MessageService) DeleteMessage(ctx context.Context, messageID string) er
 		return apperrors.Wrap(err, apperrors.ErrCodeDatabaseError, "Failed to delete message", 500)
 	}
 
-	// Remove from cache
+	// 삭제 후 캐시가 남으면 없는 메시지의 상태가 계속 조회되므로 실패를 반드시 기록한다.
 	if s.redis != nil {
-		s.redis.Delete(ctx, cache.MessageStatusKey(messageID))
+		if err := s.redis.Delete(ctx, cache.MessageStatusKey(messageID)); err != nil {
+			logger.Warnf("Failed to evict message status cache (%s): %v", messageID, err)
+		}
 	}
 
 	logger.Infof("Message deleted: %s", messageID)

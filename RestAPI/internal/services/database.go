@@ -64,78 +64,53 @@ func (d *DatabaseService) IsHealthy() bool {
 	return d.db.Ping() == nil
 }
 
-// InitSchema initializes the database schema
-func (d *DatabaseService) InitSchema() error {
-	schema := `
-	-- Users table
-	CREATE TABLE IF NOT EXISTS users (
-		id SERIAL PRIMARY KEY,
-		user_id VARCHAR(50) UNIQUE NOT NULL,
-		username VARCHAR(100),
-		email VARCHAR(255),
-		status VARCHAR(20) DEFAULT 'offline',
-		last_seen TIMESTAMP,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);
+// requiredSchema lists the columns this service reads or writes.
+// DDL 은 database/schema.sql 이 단일 출처다 — 여기서 테이블을 만들지 않는다.
+// 예전에는 이 파일이 같은 이름의 messages 를 다른 컬럼으로 CREATE TABLE IF NOT EXISTS 해서,
+// initdb 가 먼저 만든 정의와 어긋난 채 조용히 no-op 이 되고 이후 모든 쿼리가 실패했다.
+var requiredSchema = map[string][]string{
+	"users": {
+		"id", "user_id", "username", "email", "status", "last_seen", "created_at", "updated_at",
+	},
+	"messages": {
+		"id", "message_id", "user_id", "sub_id", "command", "publisher_info",
+		"server_name", "content", "is_encrypted", "status", "created_at", "processed_at",
+	},
+}
 
-	-- Messages table
-	CREATE TABLE IF NOT EXISTS messages (
-		id SERIAL PRIMARY KEY,
-		message_id UUID UNIQUE NOT NULL,
-		user_id VARCHAR(50) NOT NULL,
-		command VARCHAR(50) NOT NULL,
-		sub_id VARCHAR(100),
-		content TEXT NOT NULL,
-		metadata JSONB,
-		priority INTEGER DEFAULT 2,
-		status VARCHAR(20) DEFAULT 'pending',
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		processed_at TIMESTAMP
-	);
+// VerifySchema fails fast when the database does not match database/schema.sql.
+// 여기서 넘어가면 확장 라우트가 등록된 채 모든 쿼리가 500 을 내므로 호출측은 치명 오류로 다뤄야 한다.
+func (d *DatabaseService) VerifySchema() error {
+	for table, columns := range requiredSchema {
+		var found []string
+		query := `SELECT column_name FROM information_schema.columns
+		          WHERE table_schema = 'public' AND table_name = $1`
 
-	-- Message history table
-	CREATE TABLE IF NOT EXISTS message_history (
-		id SERIAL PRIMARY KEY,
-		message_id UUID NOT NULL,
-		user_id VARCHAR(50) NOT NULL,
-		action VARCHAR(50) NOT NULL,
-		details JSONB,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);
+		if err := d.db.Select(&found, query, table); err != nil {
+			return fmt.Errorf("failed to inspect table %q: %w", table, err)
+		}
 
-	-- Create indexes
-	CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id);
-	CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
-	CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
-	CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
-	CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
-	CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
-	CREATE INDEX IF NOT EXISTS idx_message_history_message_id ON message_history(message_id);
-	CREATE INDEX IF NOT EXISTS idx_message_history_user_id ON message_history(user_id);
+		if len(found) == 0 {
+			return fmt.Errorf("table %q is missing - apply database/schema.sql", table)
+		}
 
-	-- Create updated_at trigger function
-	CREATE OR REPLACE FUNCTION update_updated_at_column()
-	RETURNS TRIGGER AS $$
-	BEGIN
-		NEW.updated_at = CURRENT_TIMESTAMP;
-		RETURN NEW;
-	END;
-	$$ LANGUAGE plpgsql;
+		present := make(map[string]struct{}, len(found))
+		for _, column := range found {
+			present[column] = struct{}{}
+		}
 
-	-- Create trigger for users table
-	DROP TRIGGER IF EXISTS update_users_updated_at ON users;
-	CREATE TRIGGER update_users_updated_at
-		BEFORE UPDATE ON users
-		FOR EACH ROW
-		EXECUTE FUNCTION update_updated_at_column();
-	`
+		var missing []string
+		for _, column := range columns {
+			if _, ok := present[column]; !ok {
+				missing = append(missing, column)
+			}
+		}
 
-	_, err := d.db.Exec(schema)
-	if err != nil {
-		return fmt.Errorf("failed to initialize schema: %w", err)
+		if len(missing) > 0 {
+			return fmt.Errorf("table %q is missing column(s) %v - apply database/migrations/001_unify_messages.sql", table, missing)
+		}
 	}
 
-	logger.Info("Database schema initialized successfully")
+	logger.Info("Database schema verified")
 	return nil
 }

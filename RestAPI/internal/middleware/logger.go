@@ -35,6 +35,7 @@ func Logger() gin.HandlerFunc {
 
 		// Log with structured fields
 		entry := logger.WithFields(logrus.Fields{
+			"request_id":  GetRequestID(c),
 			"status_code": statusCode,
 			"latency_ms":  latency.Milliseconds(),
 			"client_ip":   clientIP,

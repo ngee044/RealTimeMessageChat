@@ -6,6 +6,8 @@ DOCKER_IMAGE=rtmc-api-server
 VERSION?=1.0.0
 BUILD_TIME=$(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS=-ldflags "-w -s -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME)"
+# .github/workflows/ci.yml 의 Lint 단계와 동일한 버전을 유지한다.
+GOLANGCI_LINT_VERSION=v1.64.8
 
 help: ## Display this help screen
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -74,7 +76,7 @@ deps: ## Download dependencies
 
 install-tools: ## Install development tools
 	@echo "Installing development tools..."
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@go install github.com/swaggo/swag/cmd/swag@latest
 	@echo "Tools installed"
 

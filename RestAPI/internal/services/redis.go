@@ -2,13 +2,47 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/config"
+	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/internal/middleware"
 	"github.com/hyunkyulee/RealTimeMessageChat/RestAPI/pkg/logger"
 	"github.com/redis/go-redis/v9"
 )
+
+// metricsHook 은 모든 Redis 명령의 지연·성공 여부를 Prometheus 에 적립한다.
+// RedisService 의 래퍼마다 계측을 넣는 대신 훅 한 곳에서 전수 처리한다.
+type metricsHook struct{}
+
+func (metricsHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+
+func (metricsHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		start := time.Now()
+		err := next(ctx, cmd)
+		middleware.RecordRedisOperation(cmd.Name(), time.Since(start), operationError(err))
+		return err
+	}
+}
+
+func (metricsHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		start := time.Now()
+		err := next(ctx, cmds)
+		middleware.RecordRedisOperation("pipeline", time.Since(start), operationError(err))
+		return err
+	}
+}
+
+// operationError 는 키 부재(redis.Nil)를 오류로 집계하지 않는다 — 정상적인 캐시 미스다.
+func operationError(err error) error {
+	if errors.Is(err, redis.Nil) {
+		return nil
+	}
+	return err
+}
 
 // RedisService handles Redis operations
 type RedisService struct {
@@ -28,6 +62,8 @@ func NewRedisService(cfg *config.RedisConfig) (*RedisService, error) {
 		PoolSize:     cfg.PoolSize,
 		MinIdleConns: cfg.MinIdleConns,
 	})
+
+	client.AddHook(metricsHook{})
 
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
