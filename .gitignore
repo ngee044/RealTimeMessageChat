@@ -374,4 +374,11 @@ target/
 .vscode/
 CMakeSettings.json
 CLAUDE.md
+docs/
 
+
+# 환경변수 시크릿 (docker/.env.example 만 커밋)
+.env
+.env.local
+!*.env.example
+!.env.example
