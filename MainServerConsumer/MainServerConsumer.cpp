@@ -12,6 +12,7 @@
 
 #include <filesystem>
 #include <iostream>
+#include <expected>
 
 using namespace Utilities;
 
@@ -29,7 +30,7 @@ MainServerConsumer::~MainServerConsumer()
 	stop();
 }
 
-auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<std::string>>
+auto MainServerConsumer::create_thread_pool() -> std::expected<void, std::string>
 {
 	destroy_thread_pool();
 
@@ -39,7 +40,7 @@ auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<
 	}
 	catch(const std::bad_alloc& e)
 	{
-		return { false, std::format("Memory allocation failed to ThreadPool: {}", e.what()) };
+		return std::unexpected(std::format("Memory allocation failed to ThreadPool: {}", e.what()));
 	}
 	
 	for (auto i = 0; i < configurations_->high_priority_count(); i++)
@@ -51,7 +52,7 @@ auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 		}
 
 		thread_pool_->push(worker);
@@ -66,7 +67,7 @@ auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 		}
 
 		thread_pool_->push(worker);
@@ -81,20 +82,20 @@ auto MainServerConsumer::create_thread_pool() -> std::tuple<bool, std::optional<
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 		}
 
 		thread_pool_->push(worker);
 	}
 
-	auto [result, message] = thread_pool_->start();
-	if (!result)
+	auto start_result = thread_pool_->start();
+	if (!start_result)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to start thread pool: {}", message.value()));
-		return { false, message.value() };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start thread pool: {}", start_result.error()));
+		return std::unexpected(start_result.error());
 	}
 
-	return { true, std::nullopt };
+	return {};
 }
 
 auto MainServerConsumer::destroy_thread_pool() -> void
@@ -109,13 +110,13 @@ auto MainServerConsumer::destroy_thread_pool() -> void
 }
 
 
-auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
+auto MainServerConsumer::start() -> std::expected<void, std::string>
 {	
-	auto [result, error_message] = create_thread_pool();
-	if (!result)
+	auto thread_pool_result = create_thread_pool();
+	if (!thread_pool_result)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to create thread pool: {}", error_message.value()));
-		return { false, std::format("Failed to create thread pool: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to create thread pool: {}", thread_pool_result.error()));
+		return std::unexpected(std::format("Failed to create thread pool: {}", thread_pool_result.error()));
 	}
 
 	SSLOptions ssl_options;
@@ -130,11 +131,11 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 															 configurations_->rabbit_mq_user_name(),
 															 configurations_->rabbit_mq_password(), ssl_options);
 														 
-	std::tie(result, error_message) = work_queue_consume_->start();
-	if (!result)
+	auto queue_start_result = work_queue_consume_->start();
+	if (!queue_start_result)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to start work queue consume: {}", error_message.value()));
-		return { false, std::format("Failed to start work queue consume: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start work queue consume: {}", queue_start_result.error()));
+		return std::unexpected(std::format("Failed to start work queue consume: {}", queue_start_result.error()));
 	}
 	Logger::handle().write(LogTypes::Information, "work queue consume started");
 
@@ -142,15 +143,18 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 	constexpr int max_retries = 5;
 	constexpr int retry_delay_sec = 5;
 	bool connected = false;
+	std::string connect_error_message = "Unknown error";
 
 	for (int retry = 0; retry < max_retries; ++retry)
 	{
-		std::tie(result, error_message) = work_queue_consume_->connect(60);
-		if (result)
+		auto queue_connect_result = work_queue_consume_->connect(60);
+		if (queue_connect_result)
 		{
 			connected = true;
 			break;
 		}
+
+		connect_error_message = queue_connect_result.error();
 
 		if (retry < max_retries - 1)
 		{
@@ -162,8 +166,8 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 
 	if (!connected)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to connect work queue consume after {} retries: {}", max_retries, error_message.value_or("Unknown error")));
-		return { false, std::format("Failed to connect work queue consume after {} retries", max_retries) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to connect work queue consume after {} retries: {}", max_retries, connect_error_message));
+		return std::unexpected(std::format("Failed to connect work queue consume after {} retries", max_retries));
 	}
 	Logger::handle().write(LogTypes::Information, "work queue consume connected");
 
@@ -177,8 +181,8 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 
 		redis_client_ = std::make_shared<RedisClient>(configurations_->redis_host(), configurations_->redis_port(), tls_options, configurations_->redis_db_global_message_index());
 
-		auto [connected, connect_error] = redis_client_->connect();
-		if (!connected)
+		auto redis_connect_result = redis_client_->connect();
+		if (!redis_connect_result)
 		{
 			destroy_thread_pool();
 			work_queue_consume_->stop();
@@ -186,14 +190,14 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 
 			redis_client_.reset();
 
-			Logger::handle().write(LogTypes::Error, std::format("Failed to connect redis: {}", connect_error.value()));
-			return { false, std::format("Failed to connect redis: {}", connect_error.value()) };
+			Logger::handle().write(LogTypes::Error, std::format("Failed to connect redis: {}", redis_connect_result.error()));
+			return std::unexpected(std::format("Failed to connect redis: {}", redis_connect_result.error()));
 		}
 	}
 	else
 	{
 		Logger::handle().write(LogTypes::Error, "Redis is not used");
-		return { false, "Redis is not used" };
+		return std::unexpected("Redis is not used");
 	}
 
 	Logger::handle().write(LogTypes::Information, "redis connected");
@@ -201,29 +205,42 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 	// Initialize database connection if enabled
 	if (configurations_->use_database())
 	{
+		std::string db_error;
 		try
 		{
 			db_client_ = std::make_shared<Database::PostgresDB>(configurations_->database_connection_string());
-			Logger::handle().write(LogTypes::Information, "Database client initialized successfully");
+
+			if (db_client_->handler() == nullptr || PQstatus(db_client_->handler()) != CONNECTION_OK)
+			{
+				db_error = "PostgreSQL connection is not established";
+			}
 		}
 		catch (const std::exception& e)
+		{
+			db_error = e.what();
+		}
+
+		if (!db_error.empty())
 		{
 			destroy_thread_pool();
 			work_queue_consume_->stop();
 			work_queue_consume_.reset();
 			redis_client_.reset();
+			db_client_.reset();
 
-			Logger::handle().write(LogTypes::Error, std::format("Failed to initialize database: {}", e.what()));
-			return { false, std::format("Failed to initialize database: {}", e.what()) };
+			Logger::handle().write(LogTypes::Error, std::format("Failed to initialize database: {}", db_error));
+			return std::unexpected(std::format("Failed to initialize database: {}", db_error));
 		}
+
+		Logger::handle().write(LogTypes::Information, "Database client initialized successfully");
 	}
 	else
 	{
 		Logger::handle().write(LogTypes::Information, "Database is not enabled");
 	}
 
-	std::tie(result, error_message) = consume_queue();
-	if (!result)
+	auto consume_result = consume_queue();
+	if (!consume_result)
 	{
 		destroy_thread_pool();
 		work_queue_consume_->stop();
@@ -231,32 +248,62 @@ auto MainServerConsumer::start() -> std::tuple<bool, std::optional<std::string>>
 
 		redis_client_.reset();
 
-		Logger::handle().write(LogTypes::Error, std::format("Failed to consume queue: {}", error_message.value()));
-		return { false, std::format("Failed to consume queue: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to consume queue: {}", consume_result.error()));
+		return std::unexpected(std::format("Failed to consume queue: {}", consume_result.error()));
 	}
 
-	return { true, std::nullopt };
+	return {};
 }
 
-auto MainServerConsumer::wait_stop() -> std::tuple<bool, std::optional<std::string>>
+auto MainServerConsumer::wait_stop() -> std::expected<void, std::string>
 {
 	if (work_queue_consume_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "work_queue_consume is null");
-		return { false, "work_queue_consume is null" };
+		return std::unexpected("work_queue_consume is null");
 	}
 
 	work_queue_consume_->wait_stop();
 
-	return { true, std::nullopt };
+	return {};
 }
 
 auto MainServerConsumer::stop() -> void
 {
+	if (stopped_.exchange(true))
+	{
+		return;
+	}
+
 	if (work_queue_consume_ != nullptr)
 	{
+		constexpr int max_stop_consume_attempts = 3;
+		bool consume_stopped = false;
+		std::string stop_consume_error = "Unknown error";
+
+		for (int attempt = 0; attempt < max_stop_consume_attempts; ++attempt)
+		{
+			auto stop_consume_result = work_queue_consume_->stop_consume();
+			if (stop_consume_result)
+			{
+				consume_stopped = true;
+				break;
+			}
+
+			stop_consume_error = stop_consume_result.error();
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		}
+
+		if (!consume_stopped)
+		{
+			Logger::handle().write(LogTypes::Error,
+				std::format("Failed to stop consume after {} attempts: {}", max_stop_consume_attempts,
+							stop_consume_error));
+		}
+
 		work_queue_consume_->stop();
-		work_queue_consume_.reset();
+
 	}
 
 	destroy_thread_pool();
@@ -273,47 +320,46 @@ auto MainServerConsumer::stop() -> void
 	}
 }
 
-auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::string>>
+auto MainServerConsumer::consume_queue() -> std::expected<void, std::string>
 {
 	if (configurations_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "configurations is null");
-		return { false, "configurations is null" };
+		return std::unexpected("configurations is null");
 	}
 
 	if (work_queue_consume_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "work_queue_consume is null");
-		return { false, "work_queue_consume is null" };
+		return std::unexpected("work_queue_consume is null");
 	}
 
 	if (redis_client_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "redis_client is null");
-		return { false, "redis_client is null" };
+		return std::unexpected("redis_client is null");
 	}
 
-	auto [declred_name, error] = work_queue_consume_->channel_open(work_queue_channel_id_, configurations_->consume_queue_name());
-	if (!declred_name.has_value())
+	auto declred_name = work_queue_consume_->channel_open(work_queue_channel_id_, configurations_->consume_queue_name());
+	if (!declred_name)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to open channel: {}", error.value()));
-		return { false, error };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to open channel: {}", declred_name.error()));
+		return std::unexpected(declred_name.error());
 	}
 
-	auto [prepare_success, prepare_error] = work_queue_consume_->prepare_consume();
-	if (!prepare_success)
+	auto prepare_result = work_queue_consume_->prepare_consume();
+	if (!prepare_result)
 	{
-		return { false, std::format("cannot prepare consume: {}", prepare_error.value()) };
+		return std::unexpected(std::format("cannot prepare consume: {}", prepare_result.error()));
 	}
 
-	auto [consume_register, consume_error] = work_queue_consume_->register_consume(work_queue_channel_id_, configurations_->consume_queue_name(),
-		[&](const std::string& queue_name, const std::string& message, const std::string& message_type)-> std::tuple<bool, std::optional<std::string>>
+	auto register_result = work_queue_consume_->register_consume(work_queue_channel_id_, configurations_->consume_queue_name(),
+		[&](const std::string& queue_name, const std::string& message, const std::string& message_type)-> std::expected<void, std::string>
 		{
 			try
 			{
 				Logger::handle().write(LogTypes::Sequence, std::format("consume message: queue_name[{}] => {}", queue_name, message));
 
-				// JSON parsing with exception handling
 				boost::json::value message_value;
 				try
 				{
@@ -321,44 +367,73 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 				}
 				catch (const std::exception& e)
 				{
-					Logger::handle().write(LogTypes::Error, std::format("JSON parsing failed: {}", e.what()));
-					return { false, std::format("JSON parsing failed: {}", e.what()) };
+					Logger::handle().write(LogTypes::Error, std::format("Dropping malformed message - JSON parsing failed: {}", e.what()));
+					return {};
 				}
 
 				if (!message_value.is_object())
 				{
-					Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", message));
-					return { false, "Failed to parse message" };
+					Logger::handle().write(LogTypes::Error, std::format("Dropping message - root is not a JSON object: {}", message));
+					return {};
 				}
 
 				auto received_message = message_value.as_object();
 				if (!received_message.contains("id") || !received_message.at("id").is_string())
 				{
-					Logger::handle().write(LogTypes::Error, std::format("Message missing 'id' field: {}", message));
-					return { false, "Message missing 'id' field" };
+					Logger::handle().write(LogTypes::Error, std::format("Dropping message - missing 'id' field: {}", message));
+					return {};
 				}
 
 				if (!received_message.contains("sub_id") || !received_message.at("sub_id").is_string())
 				{
-					Logger::handle().write(LogTypes::Error, std::format("Message missing 'sub_id' field: {}", message));
-					return { false, "Message missing 'sub_id' field" };
+					Logger::handle().write(LogTypes::Error, std::format("Dropping message - missing 'sub_id' field: {}", message));
+					return {};
 				}
 
 				if (!received_message.contains("message") || !received_message.at("message").is_object())
 				{
-					Logger::handle().write(LogTypes::Error, std::format("Message missing 'message' field: {}", message));
-					return { false, "Message missing 'message' field" };
+					Logger::handle().write(LogTypes::Error, std::format("Dropping message - missing 'message' object: {}", message));
+					return {};
+				}
+
+				auto inner_message = received_message.at("message").as_object();
+				if (!inner_message.contains("content") || !inner_message.at("content").is_string())
+				{
+					Logger::handle().write(LogTypes::Error, std::format("Dropping message - missing 'message.content': {}", message));
+					return {};
 				}
 
 				// Store message in Redis for MainServer to broadcast
-				if (redis_client_ != nullptr)
-				{
-					redis_client_->set(configurations_->global_message_key(), message);
-				}
-				else
+				if (redis_client_ == nullptr)
 				{
 					Logger::handle().write(LogTypes::Error, "Redis client is null, cannot store message");
-					return { false, "Redis client is null" };
+					return std::unexpected("Redis client is null");
+				}
+
+				const auto& global_key = configurations_->global_message_key();
+				auto queue_result = redis_client_->rpush(global_key, { message });
+				if (!queue_result)
+				{
+					auto length_result = redis_client_->llen(global_key);
+					const bool wrong_type = !length_result && length_result.error().find("WRONGTYPE") != std::string::npos;
+
+					if (!wrong_type)
+					{
+						Logger::handle().write(LogTypes::Error,
+							std::format("Failed to queue message in Redis: {}", queue_result.error()));
+						return std::unexpected("Failed to queue message in Redis");
+					}
+
+					Logger::handle().write(LogTypes::Information, "Removing legacy string value at global message key");
+					redis_client_->del(global_key);
+
+					auto requeue_result = redis_client_->rpush(global_key, { message });
+					if (!requeue_result)
+					{
+						Logger::handle().write(LogTypes::Error,
+							std::format("Failed to queue message in Redis after cleanup: {}", requeue_result.error()));
+						return std::unexpected("Failed to queue message in Redis");
+					}
 				}
 
 				// Store message in database asynchronously if database is enabled
@@ -375,11 +450,11 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 							Thread::JobPriorities::Low
 						);
 
-						auto [push_success, push_error] = thread_pool_->push(db_worker);
-						if (!push_success)
+						auto push_result = thread_pool_->push(db_worker);
+						if (!push_result)
 						{
 							Logger::handle().write(LogTypes::Error,
-								std::format("Failed to push DBWorker to thread pool: {}", push_error.value_or("Unknown error")));
+								std::format("Failed to push DBWorker to thread pool: {}", push_result.error()));
 							// Don't return error - database storage is non-critical
 						}
 						else
@@ -395,27 +470,27 @@ auto MainServerConsumer::consume_queue() -> std::tuple<bool, std::optional<std::
 					}
 				}
 
-				return { true, std::nullopt };
+				return {};
 			}
 			catch (const std::exception& e)
 			{
 				Logger::handle().write(LogTypes::Error, std::format("Consume callback exception: {}", e.what()));
-				return { false, std::format("Consume callback exception: {}", e.what()) };
+				return std::unexpected(std::format("Consume callback exception: {}", e.what()));
 			}
 		});
 
-	if (!consume_register)
+	if (!register_result)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to start consume: {}", consume_error.value()));
-		return { false, consume_error };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start consume: {}", register_result.error()));
+		return std::unexpected(register_result.error());
 	}
 
-	auto [consume_start, consume_start_error] = work_queue_consume_->start_consume();
-	if (!consume_start)
+	auto consume_start_result = work_queue_consume_->start_consume();
+	if (!consume_start_result)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to start consume: {}", consume_start_error.value()));
-		return { false, consume_start_error };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start consume: {}", consume_start_result.error()));
+		return std::unexpected(consume_start_result.error());
 	}
 
-	return { true, std::nullopt };	
+	return {};	
 }

@@ -5,6 +5,7 @@
 #include <string>
 #include <tuple>
 #include <optional>
+#include <expected>
 #include <memory>
 
 
@@ -13,8 +14,8 @@ class UserClientManager
 public:
 	virtual ~UserClientManager();
 
-	auto add(const std::string& id, const std::string& sub_id) -> std::tuple<bool, std::optional<std::string>>;
-	auto remove(const std::string& id, const std::string& sub_id) -> std::tuple<bool, std::optional<std::string>>;
+	auto add(const std::string& id, const std::string& sub_id) -> std::expected<void, std::string>;
+	auto remove(const std::string& id, const std::string& sub_id) -> std::expected<void, std::string>;
 
 	auto clinets() -> std::map<std::tuple<std::string, std::string>, std::tuple<std::string, std::string>>;
 private:

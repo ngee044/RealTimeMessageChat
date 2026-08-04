@@ -26,7 +26,6 @@ Configurations::Configurations(ArgumentParser&& arguments)
 	, buffer_size_(1024)
 	, server_ip_("127.0.0.1")
 	, server_port_(9876)
-	, encrypt_mode_(true)
 {
 	root_path_ = arguments.program_folder();
 
@@ -38,7 +37,6 @@ Configurations::~Configurations(void) {}
 
 auto Configurations::write_file() -> LogTypes { return write_file_; }
 
-auto Configurations::encrypt_mode() -> bool { return false; }
 
 auto Configurations::write_console() -> LogTypes { return write_console_; }
 
@@ -73,10 +71,10 @@ auto Configurations::load() -> void
 
 	File source;
 	source.open(std::format("{}user_client_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
-	auto [source_data, error_message] = source.read_bytes();
-	if (source_data == std::nullopt)
+	auto source_data = source.read_bytes();
+	if (!source_data)
 	{
-		Logger::handle().write(LogTypes::Error, error_message.value());
+		Logger::handle().write(LogTypes::Error, source_data.error());
 		return;
 	}
 
@@ -92,17 +90,17 @@ auto Configurations::load() -> void
 		log_root_path_ = message.at("log_root_path").as_string().data();
 	}
 
-	if (message.contains("write_file") && message.at("write_file").is_string())
+	if (message.contains("write_file_log") && message.at("write_file_log").is_number())
 	{
 		write_file_ = static_cast<LogTypes>(message.at("write_file_log").as_int64());
 	}
 
-	if (message.contains("write_console") && message.at("write_console").is_string())
+	if (message.contains("write_console_log") && message.at("write_console_log").is_number())
 	{
-		write_console_ = static_cast<LogTypes>(message.at("write_console").as_int64());
+		write_console_ = static_cast<LogTypes>(message.at("write_console_log").as_int64());
 	}
 
-	if (message.contains("callback_message_log") && message.at("callback_message_log").is_string())
+	if (message.contains("callback_message_log") && message.at("callback_message_log").is_number())
 	{
 		callback_message_log_ = static_cast<LogTypes>(message.at("callback_message_log").as_int64());
 	}

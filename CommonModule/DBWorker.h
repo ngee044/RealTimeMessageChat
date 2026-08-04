@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <optional>
+#include <expected>
 #include <vector>
 
 namespace Database
@@ -50,11 +51,9 @@ namespace Database
 		/**
 		 * @brief Main working method that executes the database operation
 		 *
-		 * @return std::tuple<bool, std::optional<std::string>>
-		 *         - bool: true if successful, false otherwise
-		 *         - optional<string>: error message if failed
+		 * @return std::expected<void, std::string>
 		 */
-		auto working() -> std::tuple<bool, std::optional<std::string>> override;
+		auto working() -> std::expected<void, std::string> override;
 
 	private:
 		/**
@@ -71,20 +70,17 @@ namespace Database
 		 *   }
 		 * }
 		 *
-		 * @return std::tuple<bool, std::optional<std::string>>
+		 * @return std::expected<void, std::string>
 		 */
-		auto parse_message() -> std::tuple<bool, std::optional<std::string>>;
+		auto parse_message() -> std::expected<void, std::string>;
 
 		/**
 		 * @brief Encrypt the message content using AES-256-CBC
 		 *
 		 * @param message Plain text message
-		 * @return std::tuple<bool, std::string, std::optional<std::string>>
-		 *         - bool: success
-		 *         - string: encrypted message (base64 encoded) or original if encryption fails
-		 *         - optional<string>: error message
+		 * @return std::expected<std::string, std::string>
 		 */
-		auto encrypt_message(const std::string& message) -> std::tuple<bool, std::string, std::optional<std::string>>;
+		auto encrypt_message(const std::string& message) -> std::expected<std::string, std::string>;
 
 		/**
 		 * @brief Store the message in the database
@@ -104,14 +100,9 @@ namespace Database
 		 * @param server_name Server name
 		 * @param content Message content (encrypted or plain)
 		 * @param is_encrypted Encryption flag
-		 * @return std::tuple<bool, std::optional<std::string>>
+		 * @return std::expected<void, std::string>
 		 */
-		auto store_to_database(const std::string& id,
-							   const std::string& sub_id,
-							   const std::string& publisher_info,
-							   const std::string& server_name,
-							   const std::string& content,
-							   const bool& is_encrypted) -> std::tuple<bool, std::optional<std::string>>;
+		auto store_to_database(const std::string& content, const bool& is_encrypted) -> std::expected<void, std::string>;
 
 	private:
 		std::shared_ptr<PostgresDB> db_client_;
@@ -123,6 +114,8 @@ namespace Database
 		// Parsed message fields
 		std::string id_;
 		std::string sub_id_;
+		std::string command_;
+		std::string message_id_;
 		std::string publisher_info_;
 		std::string server_name_;
 		std::string message_content_;

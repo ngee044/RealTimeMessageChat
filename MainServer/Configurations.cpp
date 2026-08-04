@@ -23,17 +23,14 @@ Configurations::Configurations(ArgumentParser&& arguments)
 	, low_priority_count_(5)
 	, write_interval_(1000)
 	, log_root_path_("")
-	, server_ip_("127.0.0.1")
 	, server_port_(9876)
 	, buffer_size_(32768)
-	, encrypt_mode_(true)
 	, use_redis_(false)
 	, use_redis_tls_(false)
 	, redis_host_("127.0.0.1")
 	, redis_port_(6379)
 	, redis_ttl_sec_(3600)
 	, redis_db_global_message_index_(0)
-	, redis_db_user_status_index_(1)
 	, use_ssl_(false)
 	, ca_cert_("")
 	, engine_("")
@@ -51,7 +48,6 @@ Configurations::~Configurations(void) {}
 
 auto Configurations::write_file() -> LogTypes { return write_file_; }
 
-auto Configurations::encrypt_mode() -> bool { return false; }
 
 auto Configurations::write_console() -> LogTypes { return write_console_; }
 
@@ -71,7 +67,6 @@ auto Configurations::log_root_path() -> std::string { return log_root_path_; }
 
 auto Configurations::buffer_size() -> std::size_t { return buffer_size_; }
 
-auto Configurations::server_ip() -> std::string { return server_ip_; }
 
 auto Configurations::server_port() -> uint16_t { return server_port_; }
 
@@ -81,7 +76,6 @@ auto Configurations::redis_port() -> int { return redis_port_; }
 
 auto Configurations::redis_ttl_sec() -> int { return redis_ttl_sec_; }
 
-auto Configurations::redis_db_user_status_index() -> int { return redis_db_user_status_index_; }
 
 auto Configurations::redis_db_global_message_index() -> int { return redis_db_global_message_index_; }
 
@@ -110,10 +104,10 @@ auto Configurations::load() -> void
 
 	File source;
 	source.open(std::format("{}main_server_configurations.json", root_path_), std::ios::in | std::ios::binary, std::locale(""));
-	auto [source_data, error_message] = source.read_bytes();
-	if (source_data == std::nullopt)
+	auto source_data = source.read_bytes();
+	if (!source_data)
 	{
-		Logger::handle().write(LogTypes::Error, error_message.value());
+		Logger::handle().write(LogTypes::Error, source_data.error());
 		return;
 	}
 
@@ -129,17 +123,17 @@ auto Configurations::load() -> void
 		log_root_path_ = message.at("log_root_path").as_string().data();
 	}
 
-	if (message.contains("write_file") && message.at("write_file").is_string())
+	if (message.contains("write_file_log") && message.at("write_file_log").is_number())
 	{
 		write_file_ = static_cast<LogTypes>(message.at("write_file_log").as_int64());
 	}
 
-	if (message.contains("write_console") && message.at("write_console").is_string())
+	if (message.contains("write_console_log") && message.at("write_console_log").is_number())
 	{
-		write_console_ = static_cast<LogTypes>(message.at("write_console").as_int64());
+		write_console_ = static_cast<LogTypes>(message.at("write_console_log").as_int64());
 	}
 
-	if (message.contains("callback_message_log") && message.at("callback_message_log").is_string())
+	if (message.contains("callback_message_log") && message.at("callback_message_log").is_number())
 	{
 		callback_message_log_ = static_cast<LogTypes>(message.at("callback_message_log").as_int64());
 	}
@@ -174,19 +168,9 @@ auto Configurations::load() -> void
 		buffer_size_ = static_cast<int>(message.at("buffer_size").as_int64());
 	}
 
-	if (message.contains("main_server_ip") && message.at("main_server_ip").is_string())
-	{
-		server_ip_ = message.at("main_server_ip").as_string().data();
-	}
-
 	if (message.contains("main_server_port") && message.at("main_server_port").is_number())
 	{
 		server_port_ = static_cast<int>(message.at("main_server_port").as_int64());
-	}
-
-	if (message.contains("encrypt_mode") && message.at("encrypt_mode").is_bool())
-	{
-		encrypt_mode_ = message.at("encrypt_mode").as_bool();
 	}
 
 	if (message.contains("use_redis") && message.at("use_redis").is_bool())
@@ -217,11 +201,6 @@ auto Configurations::load() -> void
 	if (message.contains("redis_db_global_message_index") && message.at("redis_db_global_message_index").is_number())
 	{
 		redis_db_global_message_index_ = static_cast<int>(message.at("redis_db_global_message_index").as_int64());
-	}
-
-	if (message.contains("redis_db_user_status_index") && message.at("redis_db_user_status_index").is_number())
-	{
-		redis_db_user_status_index_ = static_cast<int>(message.at("redis_db_user_status_index").as_int64());
 	}
 
 	// Validate configuration values

@@ -6,6 +6,7 @@
 #include "JobPriorities.h"
 
 #include <format>
+#include <expected>
 
 using namespace Utilities;
 
@@ -22,18 +23,17 @@ ClientCombinedMessageExecute::ClientCombinedMessageExecute(const std::string& id
 	Combiner::append(data_array, binary_data);
 	data(data_array);
 
-	save(id_);
 }
 
 ClientCombinedMessageExecute::~ClientCombinedMessageExecute()
 {
 }
 
-auto ClientCombinedMessageExecute::working() -> std::tuple<bool, std::optional<std::string>>
+auto ClientCombinedMessageExecute::working() -> std::expected<void, std::string>
 {
 	if (callback_ == nullptr)
 	{
-		return {false, "Callback is null"};
+		return std::unexpected("Callback is null");
 	}
 
 	auto data_array = get_data();
