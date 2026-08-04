@@ -9,8 +9,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -42,15 +42,15 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: rtmc
-      POSTGRES_USER: rtmc_user
-      POSTGRES_PASSWORD: rtmc_password
+      POSTGRES_DB: ${POSTGRES_DB:-rtmc}
+      POSTGRES_USER: ${POSTGRES_USER:-rtmc_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rtmc_password}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ../database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rtmc_user -d rtmc"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rtmc_user} -d ${POSTGRES_DB:-rtmc}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -114,6 +114,10 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8080:8080"
     volumes:
@@ -121,6 +125,12 @@ services:
       - ./logs/api:/app/logs
     environment:
       - GIN_MODE=release
+      - JWT_SECRET=${JWT_SECRET:-}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-}
+      - DB_USER=${POSTGRES_USER:-}
+      - DB_NAME=${POSTGRES_DB:-}
+      - RABBITMQ_USERNAME=${RABBITMQ_USER:-}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -128,6 +138,22 @@ services:
       retries: 3
       start_period: 5s
     restart: unless-stopped
+    networks:
+      - rtmc-network
+
+  userclient:
+    image: realtime-message-chat:latest
+    container_name: userclient
+    hostname: userclient
+    profiles: ["tools"]
+    depends_on:
+      mainserver:
+        condition: service_started
+    volumes:
+      - ./config/user_client_configurations.container.json:/opt/app/bin/user_client_configurations.json:ro
+      - ./logs/userclient:/opt/app/logs
+    command: ["/opt/app/bin/UserClient"]
+    restart: "no"
     networks:
       - rtmc-network
 
