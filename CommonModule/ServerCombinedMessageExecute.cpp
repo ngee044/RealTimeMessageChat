@@ -6,14 +6,14 @@
 #include "Combiner.h"
 
 #include <format>
+#include <expected>
 
 using namespace Utilities;
 
 namespace Network
 {
-ServerCombinedMessageExecute::ServerCombinedMessageExecute(const std::string& id, const std::string& message, const std::vector<uint8_t>& binary_data, const server_combine_message_callback& callback)
+ServerCombinedMessageExecute::ServerCombinedMessageExecute(const std::string& message, const std::vector<uint8_t>& binary_data, const server_combine_message_callback& callback)
 	: Job(JobPriorities::Normal, "CombinedMessageExecute")
-	, id_(id)
 	, callback_(callback)
 {
 	std::vector<uint8_t> data_array;
@@ -21,19 +21,18 @@ ServerCombinedMessageExecute::ServerCombinedMessageExecute(const std::string& id
 	Combiner::append(data_array, binary_data);
 	data(data_array);
 
-	save(id_);
 }
 
 ServerCombinedMessageExecute::~ServerCombinedMessageExecute()
 {
 }
 
-auto ServerCombinedMessageExecute::working() -> std::tuple<bool, std::optional<std::string>>
+auto ServerCombinedMessageExecute::working() -> std::expected<void, std::string>
 {
 	if (callback_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "Callback is null");
-		return { false, "Callback is null" };
+		return std::unexpected("Callback is null");
 	}
 
 	auto data_array = get_data();

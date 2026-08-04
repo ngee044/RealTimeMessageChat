@@ -2,6 +2,7 @@
 
 #include "Job.h"
 #include "ModuleHeader.hpp"
+#include <expected>
 
 using namespace Thread;
 
@@ -15,7 +16,7 @@ public:
 	virtual ~ClientCombinedMessageExecute();
 
 protected:
-	auto working() -> std::tuple<bool, std::optional<std::string>> override;
+	auto working() -> std::expected<void, std::string> override;
 	
 private:
 	std::string id_;

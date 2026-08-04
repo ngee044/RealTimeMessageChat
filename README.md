@@ -342,7 +342,7 @@ docker compose -f docker/docker-compose.yml logs -f
   "rabbitmq_port": 5672,
   "rabbitmq_user": "guest",
   "rabbitmq_password": "guest",
-  "consume_queue_name": "message_queue",
+  "consume_queue_name": "message_broadcast_queue",
   "redis_host": "redis",
   "redis_port": 6379,
   "high_priority_count": 2,

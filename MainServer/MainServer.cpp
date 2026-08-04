@@ -15,8 +15,33 @@
 
 #include <vector>
 #include <filesystem>
+#include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <thread>
+#include <expected>
 
 using namespace Utilities;
+
+namespace
+{
+	constexpr size_t max_client_id_length = 64;
+
+	constexpr auto global_message_poll_interval = std::chrono::milliseconds(100);
+
+	constexpr int max_drain_per_poll = 64;
+
+	auto is_valid_client_id(const std::string& id) -> bool
+	{
+		if (id.empty() || id.size() > max_client_id_length)
+		{
+			return false;
+		}
+
+		return std::all_of(id.begin(), id.end(), [](unsigned char character) -> bool
+						   { return std::isalnum(character) != 0 || character == '_' || character == '-'; });
+	}
+}
 
 MainServer::MainServer(std::shared_ptr<Configurations> configurations)
 	: server_(nullptr)
@@ -50,13 +75,13 @@ MainServer::~MainServer(void)
 	}
 }
 
-auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::start() -> std::expected<void, std::string>
 {
-	auto [result, error_message] = create_thread_pool();
-	if (!result)
+	auto create_result = create_thread_pool();
+	if (!create_result)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to create thread pool: {}", error_message.value()));
-		return { false, std::format("Failed to create thread pool: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to create thread pool: {}", create_result.error()));
+		return std::unexpected(std::format("Failed to create thread pool: {}", create_result.error()));
 	}
 
 	if (configurations_->use_redis())
@@ -69,72 +94,62 @@ auto MainServer::start() -> std::tuple<bool, std::optional<std::string>>
 
 		redis_client_ = std::make_shared<RedisClient>(configurations_->redis_host(), configurations_->redis_port(), tls_options, configurations_->redis_db_global_message_index());
 		
-		auto [connected, connect_error] = redis_client_->connect();
-		if (!connected)
+		auto connect_result = redis_client_->connect();
+		if (!connect_result)
 		{
 			destroy_thread_pool();
 			redis_client_.reset();
 
-			Logger::handle().write(LogTypes::Error, std::format("Failed to connect redis: {}", connect_error.value()));
-			return { false, std::format("Failed to connect redis: {}", connect_error.value()) };
+			Logger::handle().write(LogTypes::Error, std::format("Failed to connect redis: {}", connect_result.error()));
+			return std::unexpected(std::format("Failed to connect redis: {}", connect_result.error()));
 		}
 
-		redis_client_->set(global_message_key_, "");
+		clear_legacy_global_message_key();
 	}
 
-	std::tie(result, error_message) = server_->start(configurations_->server_port(), configurations_->buffer_size());
-	if (!result)
+	auto server_result = server_->start(configurations_->server_port(), configurations_->buffer_size());
+	if (!server_result)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to start server: {}", error_message.value()));
-		return { false, std::format("Failed to start server: {}", error_message.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start server: {}", server_result.error()));
+		return std::unexpected(std::format("Failed to start server: {}", server_result.error()));
 	}
 
-#if 0	
-	auto [db_result, db_error] = thread_pool_->push(
-		std::make_shared<Job>(JobPriorities::Low, std::bind(&MainServer::db_periodic_update_job, this), "db_periodic_update_job"));
-
-	if (!db_result)
-	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to start db periodic update job: {}", db_error.value()));
-		return { false, std::format("Failed to start db periodic update job: {}", db_error.value()) };
-	}
-#endif
-
-	auto [consume_result, consume_error] = thread_pool_->push(
-			std::make_shared<Job>(JobPriorities::High, std::bind(&MainServer::check_global_message, this), "check_global_message"));
+	auto consume_result = thread_pool_->push(
+			std::make_shared<Job>(JobPriorities::LongTerm, std::bind(&MainServer::check_global_message, this), "check_global_message"));
 
 	if (!consume_result)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to start consume global message job: {}", consume_error.value()));
-		return { false, std::format("Failed to start consume global message job: {}", consume_error.value()) };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start consume global message job: {}", consume_result.error()));
+		return std::unexpected(std::format("Failed to start consume global message job: {}", consume_result.error()));
 	}
 	
-	return { true, std::nullopt };
+	return {};
 }
 
 auto MainServer::stop() -> void
 {
+	stopping_.store(true);
+
 	if (server_ == nullptr)
 	{
-		Logger::handle().write(LogTypes::Error, "server is null");
 		return;
 	}
 
 	server_->stop();
 }
 
-auto MainServer::wait_stop() -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::wait_stop() -> std::expected<void, std::string>
 {
 	if (server_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "server is null");
-		return { false, "server is null" };
+		return std::unexpected("server is null");
 	}
 
 	return server_->wait_stop();
 }
 
-auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::create_thread_pool() -> std::expected<void, std::string>
 {
 	destroy_thread_pool();
 
@@ -144,7 +159,7 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 	}
 	catch(const std::bad_alloc& e)
 	{
-		return { false, std::format("Memory allocation failed to ThreadPool: {}", e.what()) };
+		return std::unexpected(std::format("Memory allocation failed to ThreadPool: {}", e.what()));
 	}
 	
 	for (auto i = 0; i < configurations_->high_priority_count(); i++)
@@ -156,7 +171,7 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 		}
 
 		thread_pool_->push(worker);
@@ -171,7 +186,7 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 		}
 
 		thread_pool_->push(worker);
@@ -186,20 +201,29 @@ auto MainServer::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 		}
 
 		thread_pool_->push(worker);
 	}
 
-	auto [result, message] = thread_pool_->start();
-	if (!result)
+	try
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to start thread pool: {}", message.value()));
-		return { false, message.value() };
+		thread_pool_->push(std::make_shared<ThreadWorker>(std::vector<JobPriorities>{ JobPriorities::LongTerm }));
+	}
+	catch(const std::bad_alloc& e)
+	{
+		return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 	}
 
-	return { true, std::nullopt };
+	auto start_result = thread_pool_->start();
+	if (!start_result)
+	{
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start thread pool: {}", start_result.error()));
+		return std::unexpected(start_result.error());
+	}
+
+	return {};
 }
 
 auto MainServer::destroy_thread_pool() -> void
@@ -213,52 +237,58 @@ auto MainServer::destroy_thread_pool() -> void
 	thread_pool_.reset();
 }
 
-auto MainServer::received_connection(const std::string& id, const std::string& sub_id, const bool& condition) -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::received_connection(const std::string& id, const std::string& sub_id, bool condition) -> std::expected<void, std::string>
 {
 	if (server_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "server is null");
-		return { false, "server is null" };
+		return std::unexpected("server is null");
 	}
 
 	if (thread_pool_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "thread_pool is null");
-		return { false, "thread_pool is null" };
+		return std::unexpected("thread_pool is null");
 	}
 
 	if (condition)
 	{
+		if (!is_valid_client_id(id))
+		{
+			Logger::handle().write(LogTypes::Error, std::format("Rejected connection: invalid client id[{}]", id));
+			return std::unexpected("invalid client id");
+		}
+
 		Logger::handle().write(LogTypes::Information, std::format("Received connection[{}, {}]: connected", id, sub_id));
-		
+
 		UserClientManager::handle().add(id, sub_id);
-		return { true, std::nullopt };
+		return {};
 	}
 
 	Logger::handle().write(LogTypes::Information, std::format("Received connection[{}, {}]: disconnected", id, sub_id));
 	
 	UserClientManager::handle().remove(id, sub_id);
-	return { true, std::nullopt };
+	return {};
 }
 
-auto MainServer::received_message(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::received_message(const std::string& id, const std::string& sub_id, const std::string& message) -> std::expected<void, std::string>
 {
 	if (server_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "server is null");
-		return { false, "server is null" };
+		return std::unexpected("server is null");
 	}
 
 	if (thread_pool_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "thread_pool is null");
-		return { false, "thread_pool is null" };
+		return std::unexpected("thread_pool is null");
 	}
 
 	if (message.empty())
 	{
 		Logger::handle().write(LogTypes::Error, "message is empty");
-		return { false, "message is empty" };
+		return std::unexpected("message is empty");
 	}
 
 	Logger::handle().write(LogTypes::Information, std::format("Received message[{}, {}]: {}", id, sub_id, message));
@@ -272,12 +302,12 @@ auto MainServer::received_message(const std::string& id, const std::string& sub_
 	);
 }
 
-auto MainServer::send_message(const std::string& message, const std::string& id, const std::string& sub_id) -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::send_message(const std::string& message, const std::string& id, const std::string& sub_id) -> std::expected<void, std::string>
 {
 	if (server_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "server is null");
-		return { false, "server is null" };
+		return std::unexpected("server is null");
 	}
 
 	Logger::handle().write(LogTypes::Information, std::format("Send message[{}, {}]: {}", id, sub_id, message));
@@ -285,31 +315,31 @@ auto MainServer::send_message(const std::string& message, const std::string& id,
 	return server_->send_message(message, id, sub_id);
 }
 
-auto MainServer::parsing_message(const std::string& id, const std::string& sub_id, const std::string& command, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::parsing_message(const std::string& id, const std::string& sub_id, const std::string& command, const std::string& message) -> std::expected<void, std::string>
 {
 	if (command.empty())
 	{
 		Logger::handle().write(LogTypes::Error, "command is empty");
-		return { false, "command is empty" };
+		return std::unexpected("command is empty");
 	}
 
 	if (message.empty())
 	{
 		Logger::handle().write(LogTypes::Error, "message is empty");
-		return { false, "message is empty" };
+		return std::unexpected("message is empty");
 	}
 
 	if (thread_pool_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "thread_pool is null");
-		return { false, "thread_pool is null" };
+		return std::unexpected("thread_pool is null");
 	}
 
 	auto iter = messages_.find(command);
 	if (iter == messages_.end())
 	{
 		Logger::handle().write(LogTypes::Error, std::format("command is not found: {}", command));
-		return { false, "command is not found" };
+		return std::unexpected("command is not found");
 	}
 
 	return thread_pool_->push(
@@ -321,191 +351,164 @@ auto MainServer::parsing_message(const std::string& id, const std::string& sub_i
 	);
 }
 
-auto MainServer::db_periodic_update_job() -> std::tuple<bool, std::optional<std::string>>
-{
-	if (thread_pool_ == nullptr)
-	{
-		Logger::handle().write(LogTypes::Error, "thread_pool is null");
-		return { false, "thread_pool is null" };
-	}
-
-	auto clinets = UserClientManager::handle().clinets();
-	boost::json::array user_list;
-	for (const auto& [user_id, user_status] : clinets)
-	{
-		auto [id, sub_id] = user_id;
-		auto [status, _] = user_status;
-		boost::json::object user_object =
-		{
-			{ "id", id },
-			{ "sub_id", sub_id },
-			{ "status", status }
-		};
-		user_list.push_back(user_object);
-	};
-
-#ifdef WIN32
-	system(std::format("db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
-#else
-/*
-	auto result = system(std::format("./db_cli --update --json_script {}", boost::json::serialize(user_list)).c_str());
-
-	if (result != 0)
-	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to update db: {}", result));
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	}
-*/
-#endif
-
-	auto job_pool = thread_pool_->job_pool();
-	if (job_pool == nullptr)
-	{
-		Logger::handle().write(LogTypes::Error, "job_pool is null");
-		return { false, "job_pool is null" };
-	}
-
-	if (!job_pool->lock())
-	{
-		Logger::handle().write(LogTypes::Error, "Failed to lock job_pool");
-		return { false, "Failed to lock job_pool" };
-	}
-
-#ifdef _DEBUG
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
-#endif
-
-	job_pool->push(
-		std::make_shared<Job>(JobPriorities::Low, std::bind(&MainServer::db_periodic_update_job, this), "db_periodic_update_job"));
-
-	return { true, std::nullopt };
-}
-
-auto MainServer::consume_message_queue() -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::consume_message_queue() -> std::expected<void, std::string>
 {
 	if (!configurations_->use_redis())
 	{
-		return { true, std::nullopt };
+		return {};
 	}
 
 	if (redis_client_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "redis_client is null");
-		return { false, "redis_client is null" };
+		return std::unexpected("redis_client is null");
 	}
 
-	// Check Redis connection and attempt reconnection if needed
-	if (!redis_client_->is_connected())
 	{
-		Logger::handle().write(LogTypes::Information, "Redis disconnected, attempting reconnection...");
+		std::scoped_lock<std::mutex> lock(mutex_);
+		if (!redis_client_->is_connected())
+		{
+			Logger::handle().write(LogTypes::Information, "Redis disconnected, attempting reconnection...");
 
-		auto [reconnected, reconnect_error] = redis_client_->connect();
-		if (!reconnected)
+			auto reconnect_result = redis_client_->connect();
+			if (!reconnect_result)
+			{
+				Logger::handle().write(LogTypes::Error,
+					std::format("Redis reconnection failed: {}", reconnect_result.error()));
+				return std::unexpected("Redis reconnection failed");
+			}
+
+			Logger::handle().write(LogTypes::Information, "Redis reconnection successful");
+		}
+	}
+
+	for (int drained = 0; drained < max_drain_per_poll; ++drained)
+	{
+		std::expected<std::optional<std::string>, std::string> pop_result;
+		{
+			std::scoped_lock<std::mutex> lock(mutex_);
+			pop_result = redis_client_->lpop(global_message_key_);
+		}
+
+		if (!pop_result)
+		{
+			Logger::handle().write(LogTypes::Error, std::format("Failed to pop global message: {}", pop_result.error()));
+			return std::unexpected(pop_result.error());
+		}
+
+		if (!pop_result.value().has_value())
+		{
+			return {};
+		}
+
+		const auto& payload = pop_result.value().value();
+
+		boost::system::error_code parse_error;
+		auto message_value = boost::json::parse(payload, parse_error);
+		if (parse_error.failed() || !message_value.is_object())
+		{
+			Logger::handle().write(LogTypes::Error, std::format("Dropping global message - not a JSON object: {}", payload));
+			continue;
+		}
+
+		auto received_message = message_value.as_object();
+		if (!received_message.contains("id") || !received_message.at("id").is_string()
+			|| !received_message.contains("sub_id") || !received_message.at("sub_id").is_string()
+			|| !received_message.contains("message") || !received_message.at("message").is_object())
+		{
+			Logger::handle().write(LogTypes::Error, std::format("Dropping global message - schema mismatch: {}", payload));
+			continue;
+		}
+
+		auto inner_message = received_message.at("message").as_object();
+		if (!inner_message.contains("content") || !inner_message.at("content").is_string())
+		{
+			Logger::handle().write(LogTypes::Error, std::format("Dropping global message - missing message.content: {}", payload));
+			continue;
+		}
+
+		boost::json::object message_object =
+		{
+			{ "id", received_message.at("id").as_string() },
+			{ "sub_id", received_message.at("sub_id").as_string() },
+
+			{ "data", inner_message.at("content").as_string() }
+		};
+
+		boost::json::object broadcast_message =
+		{
+			{ "command", "send_broadcast_message" },
+
+			{ "message", message_object }
+		};
+
+		auto send_result = send_message(boost::json::serialize(broadcast_message), "", "");
+		if (!send_result)
 		{
 			Logger::handle().write(LogTypes::Error,
-				std::format("Redis reconnection failed: {}", reconnect_error.value_or("Unknown error")));
-			return { false, "Redis reconnection failed" };
+				std::format("Broadcast failed, message dropped: {}", send_result.error()));
+			return std::unexpected(send_result.error());
 		}
-
-		Logger::handle().write(LogTypes::Information, "Redis reconnection successful");
 	}
 
-	// static redis key polling
-	auto [result, error_message] = redis_client_->get(global_message_key_);
-	if (result.empty())
-	{
-		if (error_message.has_value())
-		{
-			Logger::handle().write(LogTypes::Error, std::format("Failed to get global message: {}", error_message.value()));
-			return { false, std::format("Failed to get global message: {}", error_message.value()) };
-		}
-
-		Logger::handle().write(LogTypes::Sequence, "No global message");
-
-		return { true, std::nullopt };
-	}
-
-	auto message_value = boost::json::parse(result);
-	if (!message_value.is_object())
-	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", result));
-		return { false, "Failed to parse message" };
-	}
-
-	auto received_message = message_value.as_object();
-	if (!received_message.contains("id") || !received_message.at("id").is_string())
-	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", result));
-		return { false, "Failed to parse message" };
-	}
-
-	if (!received_message.contains("sub_id") || !received_message.at("sub_id").is_string())
-	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", result));
-		return { false, "Failed to parse message" };
-	}
-
-	if (!received_message.contains("message") || !received_message.at("message").is_string())
-	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to parse message: {}", result));
-		return { false, "Failed to parse message" };
-	}
-
-	boost::json::object message_object =
-	{
-		{ "id", received_message.at("id").as_string().data() },
-		{ "sub_id", received_message.at("sub_id").as_string().data() },
-		
-		{ "data", received_message.at("message").as_string().data() }
-	};
-
-	boost::json::object broadcast_message = 
-	{
-		{ "command", "send_broadcast_message" },
-
-		{ "message", message_object }
-	};
-
-	redis_client_->set(global_message_key_, "");
-
-	return send_message(boost::json::serialize(broadcast_message), "", "");
+	return {};
 }
 
-auto MainServer::check_global_message()-> std::tuple<bool, std::optional<std::string>>
+auto MainServer::clear_legacy_global_message_key() -> void
 {
-	if (thread_pool_ == nullptr)
+	if (redis_client_ == nullptr)
 	{
-		Logger::handle().write(LogTypes::Error, "thread_pool is null");
-		return { false, "thread_pool is null" };
+		return;
 	}
 
-	auto job_pool = thread_pool_->job_pool();
-	if (job_pool == nullptr)
+	std::scoped_lock<std::mutex> lock(mutex_);
+
+	auto length_result = redis_client_->llen(global_message_key_);
+	if (length_result)
 	{
-		Logger::handle().write(LogTypes::Error, "job_pool is null");
-		return { false, "job_pool is null" };
+		if (length_result.value() > 0)
+		{
+			Logger::handle().write(LogTypes::Information, std::format("Global message queue has {} pending item(s)", length_result.value()));
+		}
+
+		return;
 	}
 
-	if (!job_pool->lock())
+	if (length_result.error().find("WRONGTYPE") == std::string::npos)
 	{
-		Logger::handle().write(LogTypes::Error, "Failed to lock job_pool");
-		return { false, "Failed to lock job_pool" };
+		Logger::handle().write(LogTypes::Information,
+			std::format("Cannot inspect global message key: {}", length_result.error()));
+		return;
 	}
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-	job_pool->push(
-		std::make_shared<Job>(JobPriorities::High, std::bind(&MainServer::check_global_message, this), "check_global_message"));
-
-	return consume_message_queue();
+	Logger::handle().write(LogTypes::Information, "Removing legacy string value at global message key");
+	redis_client_->del(global_message_key_);
 }
 
-auto MainServer::request_client_status_update(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+auto MainServer::check_global_message()-> std::expected<void, std::string>
+{
+	while (!stopping_.load())
+	{
+		auto consume_result = consume_message_queue();
+		if (!consume_result)
+		{
+			Logger::handle().write(LogTypes::Sequence,
+				std::format("Global message poll failed, retrying: {}", consume_result.error()));
+		}
+
+		std::this_thread::sleep_for(global_message_poll_interval);
+	}
+
+	Logger::handle().write(LogTypes::Information, "Global message poll loop stopped");
+	return {};
+}
+
+auto MainServer::request_client_status_update(const std::string& id, const std::string& sub_id, const std::string& message) -> std::expected<void, std::string>
 {
 	if (server_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "server is null");
-		return { false, "server is null" };
+		return std::unexpected("server is null");
 	}
 
 	// JSON parsing with exception handling
@@ -516,14 +519,14 @@ auto MainServer::request_client_status_update(const std::string& id, const std::
 		if (!parsed.is_object())
 		{
 			Logger::handle().write(LogTypes::Error, std::format("Message is not a JSON object: {}", message));
-			return { false, "Message is not a JSON object" };
+			return std::unexpected("Message is not a JSON object");
 		}
 		received_message = parsed.as_object();
 	}
 	catch (const std::exception& e)
 	{
 		Logger::handle().write(LogTypes::Error, std::format("JSON parsing failed: {}", e.what()));
-		return { false, std::format("JSON parsing failed: {}", e.what()) };
+		return std::unexpected(std::format("JSON parsing failed: {}", e.what()));
 	}
 
 	Logger::handle().write(LogTypes::Information, std::format("Received message: {}", message));
@@ -535,6 +538,7 @@ auto MainServer::request_client_status_update(const std::string& id, const std::
 	}
 	else
 	{
+		std::scoped_lock<std::mutex> lock(mutex_);
 		redis_client_->set(id + "::" + sub_id, message, configurations_->redis_ttl_sec());
 	}
 

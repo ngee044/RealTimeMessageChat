@@ -10,8 +10,11 @@
 #include <memory>
 #include <tuple>
 #include <optional>
+#include <expected>
 #include <map>
 #include <functional>
+#include <atomic>
+#include <mutex>
 
 using namespace Thread;
 using namespace Network;
@@ -24,29 +27,31 @@ public:
 	MainServer(std::shared_ptr<Configurations> configurations);
 	~MainServer(void);
 
-	auto start() -> std::tuple<bool, std::optional<std::string>>;
+	auto start() -> std::expected<void, std::string>;
 	auto stop() -> void;
-	auto wait_stop() -> std::tuple<bool, std::optional<std::string>>;
+	auto wait_stop() -> std::expected<void, std::string>;
 
 protected:
-	auto create_thread_pool() -> std::tuple<bool, std::optional<std::string>>;
+	auto create_thread_pool() -> std::expected<void, std::string>;
 	auto destroy_thread_pool() -> void;
 
-	auto received_connection(const std::string& id, const std::string& sub_id, const bool& condition) -> std::tuple<bool, std::optional<std::string>>;
-	auto received_message(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
-	auto send_message(const std::string& message, const std::string& id = "", const std::string& sub_id = "") -> std::tuple<bool, std::optional<std::string>>;
-	auto parsing_message(const std::string& id, const std::string& sub_id, const std::string& command, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
+	auto received_connection(const std::string& id, const std::string& sub_id, bool condition) -> std::expected<void, std::string>;
+	auto received_message(const std::string& id, const std::string& sub_id, const std::string& message) -> std::expected<void, std::string>;
+	auto send_message(const std::string& message, const std::string& id = "", const std::string& sub_id = "") -> std::expected<void, std::string>;
+	auto parsing_message(const std::string& id, const std::string& sub_id, const std::string& command, const std::string& message) -> std::expected<void, std::string>;
 	
 	// jobs
-	auto db_periodic_update_job() -> std::tuple<bool, std::optional<std::string>>;
-	auto consume_message_queue() -> std::tuple<bool, std::optional<std::string>>;
-	auto check_global_message() -> std::tuple<bool, std::optional<std::string>>;
+	auto consume_message_queue() -> std::expected<void, std::string>;
+	auto check_global_message() -> std::expected<void, std::string>;
+	auto clear_legacy_global_message_key() -> void;
 
 	// message list
-	auto request_client_status_update(const std::string& id, const std::string& sub_id, const std::string& message) -> std::tuple<bool, std::optional<std::string>>;
+	auto request_client_status_update(const std::string& id, const std::string& sub_id, const std::string& message) -> std::expected<void, std::string>;
 
 private:
 	std::mutex mutex_;
+
+	std::atomic_bool stopping_{ false };
 
 	std::shared_ptr<NetworkServer> server_;
 	std::shared_ptr<ThreadPool> thread_pool_;
@@ -57,6 +62,6 @@ private:
 
 	std::string register_key_;
 
-	std::map<std::string, std::function<std::tuple<bool, std::optional<std::string>>(const std::string&, const std::string&, const std::string&)>> messages_;
+	std::map<std::string, std::function<std::expected<void, std::string>(const std::string&, const std::string&, const std::string&)>> messages_;
 	const std::string global_message_key_ = "send_global_message";
 };

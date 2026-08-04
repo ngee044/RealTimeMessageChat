@@ -32,16 +32,17 @@ auto main(int argc, char* argv[]) -> int
 
 	main_server_consumer = std::make_shared<MainServerConsumer>(configurations_);
 
-	auto [success, message] = main_server_consumer->start();
-	if (!success)
+	auto start_result = main_server_consumer->start();
+	if (!start_result)
 	{
-		Logger::handle().write(LogTypes::Error, message.value());
+		Logger::handle().write(LogTypes::Error, start_result.error());
 	}
 	else
 	{
 		Logger::handle().write(LogTypes::Information, "MainServerConsumer started successfully");
+		main_server_consumer->wait_stop();
 	}
-	main_server_consumer->wait_stop();
+
 	main_server_consumer.reset();
 
 	configurations_.reset();
@@ -51,7 +52,7 @@ auto main(int argc, char* argv[]) -> int
 
 	deregister_signal();
 
-	return 0;
+	return start_result.has_value() ? 0 : 1;
 }
 
 void register_signal(void)

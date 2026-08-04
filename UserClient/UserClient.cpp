@@ -15,6 +15,9 @@
 
 #include <vector>
 #include <filesystem>
+#include <chrono>
+#include <thread>
+#include <expected>
 
 UserClient::UserClient(std::shared_ptr<Configurations> configurations)
 	: thread_pool_(nullptr)
@@ -35,23 +38,29 @@ UserClient::UserClient(std::shared_ptr<Configurations> configurations)
 
 UserClient::~UserClient(void)
 {
-	client_->stop();
-	client_.reset();
+	stopping_.store(true);
+
+	if (client_ != nullptr)
+	{
+		client_->stop();
+	}
 
 	destroy_thread_pool();
+
+	client_.reset();
 }
 
-auto UserClient::start() -> std::tuple<bool, std::optional<std::string>>
+auto UserClient::start() -> std::expected<void, std::string>
 {
 	if (!client_->start(configurations_->server_ip(), configurations_->server_port(), configurations_->buffer_size()))
 	{
-		return { false, "Failed to start client" };
+		return std::unexpected("Failed to start client");
 	}
 
-	auto [result, error_message] = create_thread_pool();
-	if (!result)
+	auto created = create_thread_pool();
+	if (!created)
 	{
-		return { false, std::format("Failed to create thread pool: {}", error_message.value()) };
+		return std::unexpected(std::format("Failed to create thread pool: {}", created.error()));
 	}
 
 	client_->wait_stop();
@@ -59,17 +68,22 @@ auto UserClient::start() -> std::tuple<bool, std::optional<std::string>>
 	// Properly stop thread pool after client stops
 	destroy_thread_pool();
 
-	return { true, std::nullopt };
+	return {};
 }
 
 auto UserClient::stop() -> void
 {
-	client_->stop();
+	stopping_.store(true);
 
-	destroy_thread_pool();
+	if (client_ == nullptr)
+	{
+		return;
+	}
+
+	client_->stop();
 }
 
-auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::string>>
+auto UserClient::create_thread_pool() -> std::expected<void, std::string>
 {
 	destroy_thread_pool();
 
@@ -79,7 +93,7 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 	}
 	catch(const std::bad_alloc& e)
 	{
-		return { false, std::format("Memory allocation failed to ThreadPool: {}", e.what()) };
+		return std::unexpected(std::format("Memory allocation failed to ThreadPool: {}", e.what()));
 	}
 	
 	for (auto i = 0; i < configurations_->high_priority_count(); i++)
@@ -91,7 +105,7 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 		}
 
 		thread_pool_->push(worker);
@@ -106,7 +120,7 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 		}
 
 		thread_pool_->push(worker );
@@ -121,20 +135,20 @@ auto UserClient::create_thread_pool() -> std::tuple<bool, std::optional<std::str
 		}
 		catch(const std::bad_alloc& e)
 		{
-			return { false, std::format("Memory allocation failed to ThreadWorker: {}", e.what()) };
+			return std::unexpected(std::format("Memory allocation failed to ThreadWorker: {}", e.what()));
 		}
 
 		thread_pool_->push(worker);
 	}
 
-	auto [result, message] = thread_pool_->start();
-	if (!result)
+	auto started = thread_pool_->start();
+	if (!started)
 	{
-		Logger::handle().write(LogTypes::Error, std::format("Failed to start thread pool: {}", message.value()));
-		return { false, message };
+		Logger::handle().write(LogTypes::Error, std::format("Failed to start thread pool: {}", started.error()));
+		return std::unexpected(started.error());
 	}
 
-	return { true, std::nullopt };
+	return {};
 }
 
 auto UserClient::destroy_thread_pool() -> void
@@ -150,11 +164,11 @@ auto UserClient::destroy_thread_pool() -> void
 	thread_pool_.reset();
 }
 
-auto UserClient::received_connection(const bool& condition, const bool& by_itself) -> std::tuple<bool, std::optional<std::string>>
+auto UserClient::received_connection(bool condition, bool by_itself) -> std::expected<void, std::string>
 {
 	if (client_ == nullptr)
 	{
-		return { false, "client is null" };
+		return std::unexpected("client is null");
 	}
 
 	Logger::handle().write(LogTypes::Information, std::format("received condition message from Server : {}", condition));
@@ -174,11 +188,27 @@ auto UserClient::received_connection(const bool& condition, const bool& by_itsel
 
 				thread_pool_->push(
 					std::make_shared<Job>(JobPriorities::High,
-						[this, reconnect_delay_sec, max_reconnect_attempts]() -> std::tuple<bool, std::optional<std::string>>
+						[this, reconnect_delay_sec, max_reconnect_attempts]() -> std::expected<void, std::string>
 						{
 							for (int attempt = 0; attempt < max_reconnect_attempts; ++attempt)
 							{
-								std::this_thread::sleep_for(std::chrono::seconds(reconnect_delay_sec));
+								constexpr auto poll_interval = std::chrono::milliseconds(100);
+								const int poll_count = reconnect_delay_sec * 1000 / static_cast<int>(poll_interval.count());
+
+								for (int elapsed = 0; elapsed < poll_count; ++elapsed)
+								{
+									if (stopping_.load())
+									{
+										return {};
+									}
+
+									std::this_thread::sleep_for(poll_interval);
+								}
+
+								if (stopping_.load())
+								{
+									return {};
+								}
 
 								Logger::handle().write(LogTypes::Information,
 									std::format("Reconnection attempt {}/{}", attempt + 1, max_reconnect_attempts));
@@ -187,24 +217,24 @@ auto UserClient::received_connection(const bool& condition, const bool& by_itsel
 									configurations_->server_port(), configurations_->buffer_size()))
 								{
 									Logger::handle().write(LogTypes::Information, "Reconnection successful");
-									return { true, std::nullopt };
+									return {};
 								}
 							}
 
 							Logger::handle().write(LogTypes::Error,
 								std::format("Failed to reconnect after {} attempts", max_reconnect_attempts));
-							return { false, "Failed to reconnect" };
+							return std::unexpected("Failed to reconnect");
 						}, "reconnect_job"));
 			}
 		}
 
-		return { false, "Connection lost" };
+		return std::unexpected("Connection lost");
 	}
 
 	auto job_pool = thread_pool_->job_pool();
 	if (job_pool == nullptr)
 	{
-		return { false, "job_pool is null" };
+		return std::unexpected("job_pool is null");
 	}
 
 	boost::json::object message =
@@ -219,85 +249,76 @@ auto UserClient::received_connection(const bool& condition, const bool& by_itsel
 	return client_->send_message(boost::json::serialize(message));
 }
 
-auto UserClient::received_message(const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+auto UserClient::received_message(const std::string& message) -> std::expected<void, std::string>
 {
 	if (client_ == nullptr)
 	{
-		return { false, "client is null" };
+		return std::unexpected("client is null");
 	}
 
 	if (thread_pool_ == nullptr)
 	{
-		return { false, "thread_pool is null" };
+		return std::unexpected("thread_pool is null");
 	}
 
 	return thread_pool_->push(
 			std::dynamic_pointer_cast<Job>(
 				std::make_shared<ServerMessageParsing>(
-					client_->id(), message, std::bind(&UserClient::parsing_message, this, std::placeholders::_1, std::placeholders::_2)
+					message, std::bind(&UserClient::parsing_message, this, std::placeholders::_1, std::placeholders::_2)
 				)
 			)
 		);
 
 }
 
-auto UserClient::parsing_message(const std::string& command, const std::string& message) -> std::tuple<bool, std::optional<std::string>>
+auto UserClient::parsing_message(const std::string& command, const std::string& message) -> std::expected<void, std::string>
 {
 	if (client_ == nullptr)
 	{
-		return { false, "client is null" };
+		return std::unexpected("client is null");
 	}
 
 	if (thread_pool_ == nullptr)
 	{
-		return { false, "thread_pool is null" };
+		return std::unexpected("thread_pool is null");
 	}
 
 	if (command.empty())
 	{
-		return { false, "command is empty" };
+		return std::unexpected("command is empty");
 	}
 
 	if (message.empty())
 	{
-		return { false, "message is empty" };
+		return std::unexpected("message is empty");
 	}
 
 	auto iter = messages_.find(command);
 	if (iter == messages_.end())
 	{
 		Logger::handle().write(LogTypes::Error, std::format("command is not found: {}", command));
-		return { false, "command is not found" };
+		return std::unexpected("command is not found");
 	}
 
 	return thread_pool_->push(
 			std::dynamic_pointer_cast<Job>(
 				std::make_shared<ServerMessageExecute>(
-					client_->id(), message, iter->second
+					message, iter->second
 				)
 			)
 		);
 }
 
-auto UserClient::update_user_clinet_status(const std::string message) -> std::tuple<bool, std::optional<std::string>>
+auto UserClient::update_user_clinet_status(const std::string message) -> std::expected<void, std::string>
 {
-	Logger::handle().write(LogTypes::Information, std::format("Received message: {}", message));
-	
-	boost::json::object send_message =
-	{
-		{ "id", client_->id() },
-		{ "sub_id", client_->sub_id() },
-		{ "message", "received connection from Server" },
+	Logger::handle().write(LogTypes::Information, std::format("Received client status update: {}", message));
 
-		{ "command", "request_client_status_update" }
-	};
-	
-	return client_->send_message(boost::json::serialize(send_message));
+	return {};
 }
 
-auto UserClient::send_broadcast_message(const std::string message) -> std::tuple<bool, std::optional<std::string>>
+auto UserClient::send_broadcast_message(const std::string message) -> std::expected<void, std::string>
 {
 	Logger::handle().write(LogTypes::Information, std::format("Received broadcast message: {}", message));
 
-	return { true, std::nullopt };
+	return {};
 }

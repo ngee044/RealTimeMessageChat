@@ -6,7 +6,10 @@
     "read_timeout_seconds": 30,
     "write_timeout_seconds": 30,
     "max_header_bytes": 1048576,
-    "shutdown_timeout_seconds": 15
+    "shutdown_timeout_seconds": 15,
+    "trusted_proxies": [],
+    "rate_limit_per_second": 10,
+    "rate_limit_burst": 20
   },
   "rabbitmq": {
     "host": "rabbitmq",
@@ -14,7 +17,7 @@
     "username": "guest",
     "password": "guest",
     "vhost": "/",
-    "queue_name": "message_queue",
+    "queue_name": "message_broadcast_queue",
     "durable": true,
     "auto_delete": false,
     "exclusive": false,

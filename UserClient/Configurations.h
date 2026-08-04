@@ -16,7 +16,6 @@ public:
 	virtual ~Configurations(void);
 
 	auto write_file() -> LogTypes;
-	auto encrypt_mode() -> bool;
 	auto write_console() -> LogTypes;
 	auto console_windows() -> bool;
 
@@ -43,7 +42,6 @@ private:
 	LogTypes write_console_;
 	LogTypes callback_message_log_;
 	bool console_windows_;
-	bool encrypt_mode_;
 
 	uint16_t high_priority_count_;
 	uint16_t normal_priority_count_;

@@ -30,10 +30,10 @@ auto main(int argc, char* argv[]) -> int
 
 	client_ = std::make_shared<UserClient>(configurations_);
 
-	auto [success, message] = client_->start();
-	if (!success)
+	auto started = client_->start();
+	if (!started)
 	{
-		Logger::handle().write(LogTypes::Error, message.value());
+		Logger::handle().write(LogTypes::Error, started.error());
 	}
 	else
 	{

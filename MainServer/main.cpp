@@ -32,10 +32,10 @@ auto main(int argc, char* argv[]) -> int
 
 	server_ = std::make_shared<MainServer>(configurations_);
 
-	auto [success, message] = server_->start();
-	if (!success)
+	auto start_result = server_->start();
+	if (!start_result)
 	{
-		Logger::handle().write(LogTypes::Error, message.value());
+		Logger::handle().write(LogTypes::Error, start_result.error());
 	}
 	else
 	{

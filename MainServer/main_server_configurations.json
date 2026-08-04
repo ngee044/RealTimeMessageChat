@@ -1,11 +1,11 @@
 {
-	"server_title" : "MainServer",
-	"server_sub_title" : "MainServer",
-	"main_registered_key": "main_server",
+	"client_title" : "MainServer",
+	"log_root_path" : "",
+	"write_interval" : 1000,
 	"high_priority_count" : 3,
 	"normal_priority_count" : 3,
 	"low_priority_count" : 5,
-	"write_console_log" : 3,
+	"write_console_log" : 4,
 	"write_file_log" : 0,
 	"console_windows": false,
 
@@ -15,7 +15,6 @@
 
 	"main_server_port": 9876,
 	"buffer_size": 32768,
-	"encrypt_mode" : true,
 
 	"use_redis_tls": false,
 	"use_redis": true,

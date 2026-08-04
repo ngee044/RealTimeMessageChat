@@ -5,6 +5,7 @@
 #include "JobPriorities.h"
 
 #include <format>
+#include <expected>
 
 using namespace Utilities;
 
@@ -17,19 +18,18 @@ ClientMessageExecute::ClientMessageExecute(const std::string& id, const std::str
 	, sub_id_(sub_id)
 	, callback_(callback)
 {
-	save(id_);
 }
 
 ClientMessageExecute::~ClientMessageExecute()
 {
 }
 
-auto ClientMessageExecute::working() -> std::tuple<bool, std::optional<std::string>>
+auto ClientMessageExecute::working() -> std::expected<void, std::string>
 {
 	if (callback_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "Callback is null");
-		return { false, "Callback is null" };
+		return std::unexpected("Callback is null");
 	}
 
 	return callback_(id_, sub_id_, Converter::to_string(get_data()));

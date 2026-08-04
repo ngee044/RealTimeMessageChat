@@ -45,10 +45,6 @@ print_error() {
     ((TESTS_FAILED++)) || true
 }
 
-print_warning() {
-    echo -e "${YELLOW}! $1${NC}"
-}
-
 print_info() {
     echo -e "  $1"
 }
@@ -183,99 +179,164 @@ else
     print_error "FAILED ($PUBLISH_RESULT)"
 fi
 
-# Test UserClient connection
-print_header "4. Testing UserClient Connection"
+print_header "4. End-to-End Broadcast"
 
-if [ -f "$BUILD_OUT/UserClient" ]; then
-    echo -n "  UserClient binary: "
-    print_success "Found"
+COMPOSE_FILE="$PROJECT_ROOT/docker/docker-compose.yml"
 
-    # Copy config if exists
-    if [ -f "$PROJECT_ROOT/docker/config/user_client_configurations.json" ]; then
-        cp "$PROJECT_ROOT/docker/config/user_client_configurations.json" "$BUILD_OUT/user_client_configurations.json"
-    fi
-
-    echo -n "  Connection test: "
-    cd "$BUILD_OUT"
-
-    # Run UserClient with timeout (use gtimeout on macOS if available)
-    if command -v gtimeout &>/dev/null; then
-        gtimeout 5 ./UserClient &>/dev/null &
-    elif command -v timeout &>/dev/null; then
-        timeout 5 ./UserClient &>/dev/null &
-    else
-        ./UserClient &>/dev/null &
-    fi
-    USERCLIENT_PID=$!
-
-    sleep 3
-
-    if kill -0 "$USERCLIENT_PID" 2>/dev/null; then
-        print_success "Connected"
-        kill "$USERCLIENT_PID" 2>/dev/null || true
-    else
-        wait "$USERCLIENT_PID" 2>/dev/null
-        EXIT_CODE=$?
-        if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 124 ]; then
-            print_success "OK (completed)"
-        else
-            print_warning "Exited with code $EXIT_CODE"
-        fi
-    fi
-    USERCLIENT_PID=""
+echo -n "  UserClient container: "
+docker compose -f "$COMPOSE_FILE" --profile tools up -d userclient &>/dev/null
+sleep 4
+if [ "$(docker inspect -f '{{.State.Running}}' userclient 2>/dev/null)" = "true" ]; then
+    print_success "Running"
 else
-    print_warning "UserClient binary not found, skipping connection test"
+    print_error "Failed to start"
+    docker logs userclient --tail 20 2>&1 | sed 's/^/      /'
 fi
 
-# Test API Server (if running)
-print_header "5. Testing API Server"
-
-echo -n "  Health check: "
-if curl -s http://localhost:8080/health &>/dev/null; then
-    HEALTH_RESULT=$(curl -s http://localhost:8080/health)
-    if echo "$HEALTH_RESULT" | grep -qi "ok\|healthy\|success"; then
-        print_success "OK"
-    else
-        print_success "Responding (status: $HEALTH_RESULT)"
-    fi
+echo -n "  TCP connection established: "
+if docker logs userclient 2>&1 | grep -q "received condition message from Server : true"; then
+    print_success "OK"
 else
-    print_warning "Not available (API server may not be running)"
+    print_error "No connection log"
+    docker logs userclient --tail 20 2>&1 | sed 's/^/      /'
 fi
 
-# Test sending message via API
-echo -n "  Send message API: "
-API_RESULT=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/v1/messages/send \
+BASELINE_RECEIVED=$(docker logs userclient 2>&1 | grep -c "Received broadcast message" || true)
+BASELINE_ROWS=$(docker exec postgres psql -U "${POSTGRES_USER:-rtmc_user}" -d "${POSTGRES_DB:-rtmc}" \
+    -tAc "SELECT COUNT(*) FROM messages" 2>/dev/null || echo 0)
+
+E2E_CONTENT="e2e_$(date +%s)"
+
+echo -n "  POST /api/v1/messages/send: "
+SEND_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8080/api/v1/messages/send \
     -H "Content-Type: application/json" \
-    -d '{
-        "user_id": "test_user",
-        "command": "chat_message",
-        "content": "Test message from integration test"
-    }' 2>/dev/null || echo "000")
-
-HTTP_CODE=$(echo "$API_RESULT" | tail -n1)
-if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ]; then
-    print_success "OK (HTTP $HTTP_CODE)"
-elif [ "$HTTP_CODE" = "000" ]; then
-    print_warning "API server not available"
+    -d "{\"user_id\":\"e2e_user\",\"command\":\"chat_message\",\"sub_id\":\"e2e_session\",\"content\":\"$E2E_CONTENT\"}" \
+    2>/dev/null || echo "000")
+if [ "$SEND_CODE" = "200" ]; then
+    print_success "HTTP 200"
 else
-    print_warning "HTTP $HTTP_CODE"
+    print_error "HTTP $SEND_CODE"
 fi
 
-# Check MainServer logs
-print_header "6. Checking Logs"
-
-echo -n "  MainServer logs: "
-if docker logs mainserver --tail 5 &>/dev/null; then
-    print_success "Accessible"
+echo -n "  Broadcast reached UserClient: "
+RECEIVED=0
+for _ in $(seq 1 20); do
+    if docker logs userclient 2>&1 | grep -q "$E2E_CONTENT"; then
+        RECEIVED=1
+        break
+    fi
+    sleep 1
+done
+if [ "$RECEIVED" = "1" ]; then
+    print_success "OK"
 else
-    print_warning "Not accessible"
+    print_error "Content not received within 20s"
+    echo "      --- mainserver ---"; docker logs mainserver --tail 15 2>&1 | sed 's/^/      /'
+    echo "      --- consumer ---";   docker logs mainserver-consumer --tail 15 2>&1 | sed 's/^/      /'
 fi
 
-echo -n "  Consumer logs: "
-if docker logs mainserver-consumer --tail 5 &>/dev/null; then
-    print_success "Accessible"
+echo -n "  Persisted to PostgreSQL: "
+PERSISTED=0
+for _ in $(seq 1 15); do
+    ROWS=$(docker exec postgres psql -U "${POSTGRES_USER:-rtmc_user}" -d "${POSTGRES_DB:-rtmc}" \
+        -tAc "SELECT COUNT(*) FROM messages WHERE content = '$E2E_CONTENT'" 2>/dev/null || echo 0)
+    if [ "${ROWS:-0}" -ge 1 ]; then
+        PERSISTED=1
+        break
+    fi
+    sleep 1
+done
+if [ "$PERSISTED" = "1" ]; then
+    print_success "OK"
 else
-    print_warning "Not accessible"
+    print_error "Row not found (baseline was $BASELINE_ROWS)"
+fi
+
+print_header "5. Burst Delivery (no loss)"
+
+BURST_COUNT=20
+BURST_TAG="burst_$(date +%s)"
+
+echo -n "  Publishing $BURST_COUNT messages: "
+BURST_OK=1
+for i in $(seq 1 "$BURST_COUNT"); do
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8080/api/v1/messages/send \
+        -H "Content-Type: application/json" \
+        -d "{\"user_id\":\"burst_user\",\"command\":\"chat_message\",\"sub_id\":\"s$i\",\"content\":\"${BURST_TAG}_$i\"}" \
+        2>/dev/null || echo "000")
+    [ "$CODE" = "200" ] || BURST_OK=0
+done
+if [ "$BURST_OK" = "1" ]; then
+    print_success "OK"
+else
+    print_error "Some publishes failed"
+fi
+
+echo -n "  All $BURST_COUNT delivered: "
+DELIVERED=0
+for _ in $(seq 1 30); do
+    DELIVERED=$(docker logs userclient 2>&1 | grep -c "$BURST_TAG" || true)
+    [ "${DELIVERED:-0}" -ge "$BURST_COUNT" ] && break
+    sleep 1
+done
+if [ "${DELIVERED:-0}" -ge "$BURST_COUNT" ]; then
+    print_success "$DELIVERED/$BURST_COUNT"
+else
+    print_error "$DELIVERED/$BURST_COUNT (loss detected)"
+fi
+
+echo -n "  Redis queue drained: "
+QUEUE_LEN=$(docker exec redis redis-cli LLEN send_global_message 2>/dev/null | tr -d '\r' || echo "?")
+if [ "$QUEUE_LEN" = "0" ]; then
+    print_success "LLEN=0"
+else
+    print_error "LLEN=$QUEUE_LEN"
+fi
+
+print_header "6. Queue Topology"
+
+echo -n "  Queue declared with auto_delete=false: "
+QUEUE_INFO=$(curl -s -u "$RABBITMQ_USER:$RABBITMQ_PASS" \
+    "http://$RABBITMQ_HOST:$RABBITMQ_PORT/api/queues/%2F/$QUEUE_NAME" 2>/dev/null || echo "")
+if echo "$QUEUE_INFO" | grep -q '"auto_delete":false' && echo "$QUEUE_INFO" | grep -q '"durable":true'; then
+    print_success "OK"
+else
+    print_error "Unexpected queue arguments: $(echo "$QUEUE_INFO" | head -c 200)"
+fi
+
+echo -n "  No 406 PRECONDITION_FAILED in logs: "
+if docker logs mainserver-consumer 2>&1 | grep -qi "PRECONDITION_FAILED"; then
+    print_error "Found channel declaration conflict"
+else
+    print_success "OK"
+fi
+
+print_header "7. Health and Logs"
+
+echo -n "  API health: "
+HEALTH_RESULT=$(curl -s http://localhost:8080/health 2>/dev/null || echo "")
+if echo "$HEALTH_RESULT" | grep -q '"status":"healthy"'; then
+    print_success "healthy"
+else
+    print_error "Unexpected: $(echo "$HEALTH_RESULT" | head -c 200)"
+fi
+
+for service in mainserver mainserver-consumer; do
+    echo -n "  $service logs: "
+    if docker logs "$service" --tail 5 &>/dev/null; then
+        print_success "Accessible"
+    else
+        print_error "Not accessible"
+    fi
+done
+
+echo -n "  No crash markers: "
+if docker logs mainserver 2>&1 | grep -qE "terminate|SIGSEGV|future_error"; then
+    print_error "Found crash marker in mainserver"
+elif docker logs mainserver-consumer 2>&1 | grep -qE "terminate|SIGSEGV|future_error"; then
+    print_error "Found crash marker in consumer"
+else
+    print_success "OK"
 fi
 
 # Summary

@@ -8,6 +8,7 @@
 #include "boost/json/parse.hpp"
 
 #include <format>
+#include <expected>
 
 using namespace Utilities;
 
@@ -20,19 +21,18 @@ ClientMessageParsing::ClientMessageParsing(const std::string& id, const std::str
 	, sub_id_(sub_id)
 	, callback_(callback)
 {
-	save(id_);
 }
 
 ClientMessageParsing::~ClientMessageParsing()
 {
 }
 
-auto ClientMessageParsing::working() -> std::tuple<bool, std::optional<std::string>>
+auto ClientMessageParsing::working() -> std::expected<void, std::string>
 {
 	if (callback_ == nullptr)
 	{
 		Logger::handle().write(LogTypes::Error, "Callback is null");
-		return { false, "Callback is null" };
+		return std::unexpected("Callback is null");
 	}
 
 	std::string data = Converter::to_string(get_data());
@@ -43,20 +43,20 @@ auto ClientMessageParsing::working() -> std::tuple<bool, std::optional<std::stri
 	{
 		Logger::handle().write(LogTypes::Error, std::format("[ClientMessageParsing] Failed to parse message: {}", error_code.message()));
 		Logger::handle().write(LogTypes::Error, std::format("input data = {}", data));
-		return { false, "Failed to parse message" };
+		return std::unexpected("Failed to parse message");
 	}
 
 	if (!parsed_message.is_object())
 	{
 		Logger::handle().write(LogTypes::Error, "Parsed message is not an object");
-		return { false, "Parsed message is not an object" };
+		return std::unexpected("Parsed message is not an object");
 	}
 
 	boost::json::object command_object = parsed_message.as_object();
 	if (!command_object.contains("command") || !command_object.at("command").is_string())
 	{
 		Logger::handle().write(LogTypes::Error, "Parsed message does not contain message object");
-		return { false, "Parsed message does not contain message object" };
+		return std::unexpected("Parsed message does not contain message object");
 	}
 
 	std::string command = command_object.at("command").as_string().data();

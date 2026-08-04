@@ -24,12 +24,15 @@ print_header() {
     echo -e "${BLUE}===========================================${NC}"
 }
 
+TESTS_FAILED=0
+
 print_success() {
     echo -e "${GREEN}✓ $1${NC}"
 }
 
 print_error() {
     echo -e "${RED}✗ $1${NC}"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
 print_warning() {
@@ -154,7 +157,7 @@ else
     if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 124 ]; then
         print_success "UserClient connection test completed"
     else
-        print_warning "UserClient exited with code $EXIT_CODE"
+        print_error "UserClient exited with code $EXIT_CODE"
     fi
     USERCLIENT_PID=""
 fi
@@ -168,7 +171,7 @@ if [ -n "${USERCLIENT_PID:-}" ] && kill -0 "$USERCLIENT_PID" 2>/dev/null; then
     sleep 1
 
     if kill -0 "$USERCLIENT_PID" 2>/dev/null; then
-        print_warning "UserClient still running after SIGTERM"
+        print_error "UserClient did not honor SIGTERM"
     else
         print_success "UserClient gracefully shut down"
     fi
@@ -180,17 +183,29 @@ kill -TERM "$MAINSERVER_PID" 2>/dev/null || true
 sleep 2
 
 if kill -0 "$MAINSERVER_PID" 2>/dev/null; then
-    print_warning "MainServer still running after SIGTERM, sending SIGKILL..."
+    print_error "MainServer did not honor SIGTERM, sending SIGKILL..."
     kill -KILL "$MAINSERVER_PID" 2>/dev/null || true
 else
-    print_success "MainServer gracefully shut down"
+    wait "$MAINSERVER_PID" 2>/dev/null
+    MAINSERVER_EXIT=$?
+    if [ "$MAINSERVER_EXIT" -eq 0 ]; then
+        print_success "MainServer gracefully shut down (exit 0)"
+    else
+        print_error "MainServer exited abnormally (exit $MAINSERVER_EXIT)"
+    fi
 fi
 MAINSERVER_PID=""
 
 print_header "Test Summary"
-print_success "All basic tests passed!"
+if [ "$TESTS_FAILED" -eq 0 ]; then
+    print_success "All basic tests passed"
+else
+    print_error "$TESTS_FAILED check(s) failed"
+fi
 echo ""
 print_info "Note: For full integration tests, run with Docker:"
 print_info "  cd $PROJECT_ROOT/docker && ./docker-compose.sh"
 print_info "  cd $PROJECT_ROOT/tests && ./test-integration.sh"
 echo ""
+
+exit $([ "$TESTS_FAILED" -eq 0 ] && echo 0 || echo 1)
