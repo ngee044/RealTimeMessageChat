@@ -4,203 +4,133 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RealTimeMessageChat is a high-performance real-time messaging system built in C++17/20 using Boost.Asio for asynchronous I/O, RabbitMQ (AMQP) for message brokering, and Redis for caching. The system demonstrates a multi-process architecture where messages flow from an API server through RabbitMQ to a main server, which validates and broadcasts them to all connected TCP clients.
+RealTimeMessageChat is a real-time messaging system using C++23, Boost.Asio, RabbitMQ, Redis, and PostgreSQL. Multi-process architecture: REST API → RabbitMQ → Consumer → Redis/PostgreSQL → TCP Server → Clients.
 
 ### Architecture Components
 
-1. **MainServer** (`MainServer/`): TCP server that accepts client connections using `NetworkServer` from cpp_tool_kit. Handles client authentication, broadcasts messages received from RabbitMQ to all connected clients, and periodically syncs with Redis for state management.
+1. **RestAPI** (`RestAPI/`): Go (Gin) REST API. Entry point for messages — publishes to RabbitMQ. Has JWT auth, Prometheus metrics, Swagger docs.
+2. **MainServer** (`MainServer/`): Boost.Asio TCP server. Polls Redis for new messages, broadcasts to connected clients.
+3. **MainServerConsumer** (`MainServerConsumer/`): RabbitMQ consumer. Validates messages, stores to Redis + PostgreSQL (via `DBWorker`).
+4. **UserClient** (`UserClient/`): TCP client connecting to MainServer.
+5. **CommonModule** (`CommonModule/`): Shared message parsing/execution callbacks. 8 callback type aliases in `ModuleHeader.hpp` — all return `std::tuple<bool, std::optional<std::string>>`.
+6. **cpp_tool_kit** (`.cpp_tool_kit/`): Git submodule — `NetworkServer`/`NetworkClient`, `RedisClient`, `WorkQueueConsume`, `ThreadPool`, `Logger`, etc.
+7. **database** (`database/`): PostgreSQL schema (`schema.sql`) — `messages` table, `recent_messages` view, `cleanup_old_messages()`. Optional AES-256-CBC encryption.
 
-2. **MainServerConsumer** (`MainServerConsumer/`): RabbitMQ consumer process that subscribes to message queues via `WorkQueueConsume`. It validates incoming messages, performs business logic, interacts with Redis, and publishes validated data for MainServer to broadcast.
+## Build & Run
 
-3. **UserClient** (`UserClient/`): TCP client application using `NetworkClient` that connects to MainServer, receives broadcast messages, and sends user status updates.
-
-4. **CommonModule** (`CommonModule/`): Shared message parsing and execution logic used by both server and client components. Contains:
-   - `ServerMessageParsing/Execute`: Server-side message handlers
-   - `ClientMessageParsing/Execute`: Client-side message handlers
-   - `ServerCombinedMessageParsing/Execute`: Combined message handlers for server
-   - `ClientCombinedMessageParsing/Execute`: Combined message handlers for client
-   - `ModuleHeader.hpp`: Type aliases for callback functions
-
-5. **cpp_tool_kit** (`.cpp_tool_kit/`): Submodule containing reusable C++ utilities:
-   - `Network/`: `NetworkServer`, `NetworkClient`, `NetworkSession` - Boost.Asio based TCP networking
-   - `Redis/`: `RedisClient`, `RedisConnector` - Redis integration with TLS support
-   - `RabbitMQ/`: `WorkQueueConsume` - AMQP message queue consumer
-   - `ThreadPool/`: Thread pool implementation for concurrent task execution
-   - `Utilities/`: Logger, ArgumentParser, and other common utilities
-
-## Build System
-
-### Local Development (macOS/Linux)
+### C++ (Local)
 
 ```bash
-# Build using vcpkg for dependency management
+# build.sh only runs cmake configure — you must also run the build step:
 ./build.sh
+cmake --build build --config Release --parallel
 
-# Manual build (if build.sh doesn't work)
-rm -rf build
-mkdir build
-cd build
-cmake .. -DCMAKE_TOOLCHAIN_FILE="../../vcpkg/scripts/buildsystems/vcpkg.cmake" \
-         -DCMAKE_BUILD_TYPE=Release \
-         -DBUILD_SHARED_LIBS=OFF
+# Or full manual build (recommended — build.sh has a typo in -DCMAKE_BUILD_TYPE):
+rm -rf build && mkdir build && cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE="$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+         -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
 cmake --build . --config Release --parallel
 ```
 
-**Note**: The build script assumes vcpkg is located at `../../vcpkg` relative to the project root. Adjust the path in `build.sh` if your vcpkg installation is elsewhere.
+Outputs: `build/out/` (MainServer, UserClient, MainServerConsumer), `build/lib/`
 
-Build outputs are located in:
-- Executables: `build/out/`
-- Libraries: `build/lib/`
+### RestAPI (Go)
 
-### Docker Build & Run
+```bash
+cd RestAPI
+make run                          # Run with default config
+make build                        # Build binary
+make test                         # Tests with race detection + coverage
+make check                        # fmt + vet + lint + test (full validation)
+make swagger                      # Regenerate Swagger docs
+make install-tools                # Install golangci-lint + swag
+make dev                          # Auto-reload with air
+```
+
+### Docker
 
 ```bash
 cd docker
-./docker-compose.sh
+./docker-compose.sh               # Build and start all services
+./status.sh                       # Health check
+./logs.sh all                     # Logs (also: mainserver, consumer, rabbitmq, redis)
+./stop.sh                         # Stop all
+./run-client.sh                   # Run local UserClient → Docker MainServer
+./publish-message.sh "Hello!"     # Test message via RabbitMQ
 ```
 
-This builds and starts all services (RabbitMQ, Redis, MainServer, MainServerConsumer) using `docker/docker-compose.yml`.
+**Service ports:** MainServer 9876 (TCP), RestAPI 8080 (HTTP, health at `/health`), RabbitMQ 5672/15672 (AMQP/Management), Redis 6379, PostgreSQL 5432 (DB: rtmc, User: rtmc_user).
 
-**Docker management commands:**
+## Running Tests
+
 ```bash
-# View logs
-docker compose -f docker/docker-compose.yml logs -f mainserver
-docker compose -f docker/docker-compose.yml logs -f mainserver-consumer
+# C++ unit tests (gtest)
+cd build && ctest --output-on-failure
 
-# Stop all services
-docker compose -f docker/docker-compose.yml down
+# Go unit tests (single package: go test -v -race ./internal/handlers/...)
+cd RestAPI && make test
 
-# Check service status
-docker compose -f docker/docker-compose.yml ps
+# Local smoke tests (binary startup, port binding, SIGTERM handling)
+./tests/test-local.sh
+
+# Integration tests (requires Docker services running via docker-compose.sh)
+./tests/test-integration.sh
 ```
 
-### Dependencies (vcpkg)
+## CI/CD
 
-The project uses vcpkg for dependency management. Key dependencies defined in `vcpkg.json`:
-- `boost-asio`, `boost-json`, `boost-system`, `boost-filesystem`, `boost-process`
-- `librabbitmq` - RabbitMQ AMQP client
-- `redis-plus-plus` - Redis client with C++17 and TLS support
-- `libpq` - PostgreSQL client library
-- `cryptopp` - Cryptography library
-- `fmt` - String formatting
-- `gtest` - Google Test framework
-- `lz4` - Compression
+No CI is configured — there are no GitHub Actions workflows. Verification is local only:
+`./scripts/syntax-check.sh`, `docker compose build`, `./tests/test-local.sh`, `./tests/test-integration.sh`.
 
-## Configuration Files
+## Configuration
 
-Each component has a JSON configuration file:
-- `MainServer/main_server_configurations.json`: Server IP/port, Redis connection, RabbitMQ queue settings, thread pool sizes, SSL/TLS options
-- `MainServerConsumer/main_server_consumer_configurations.json`: RabbitMQ consumer settings, Redis connection, thread pool configuration
-- `UserClient/user_client_configurations.json`: Server connection details, client behavior settings
+Each component has a JSON config file — refer to these directly for available parameters:
+- `MainServer/main_server_configurations.json` — server IP/port, Redis, thread pool, SSL
+- `MainServerConsumer/main_server_consumer_configurations.json` — RabbitMQ, Redis, PostgreSQL, DB encryption
+- `UserClient/user_client_configurations.json` — server connection
+- `RestAPI/config/api_server_config.json` — server, RabbitMQ, Redis, PostgreSQL, JWT, metrics, logging
 
-For Docker deployments, configuration files are located in `docker/config/` and mounted into containers.
-
-**Key configuration parameters:**
-- `server_ip`, `server_port`: MainServer TCP listening address
-- `redis_host`, `redis_port`, `redis_db_*_index`: Redis connection and database indices
-- `use_redis`, `use_redis_tls`: Enable Redis and TLS
-- `consume_queue_name`: RabbitMQ queue name for MainServerConsumer
-- `high_priority_count`, `normal_priority_count`, `low_priority_count`: Thread pool worker counts
-- `buffer_size`: Network buffer size for TCP connections
-- `encrypt_mode`, `use_ssl`: Enable encryption and SSL/TLS
+Docker configs: `docker/config/` (mounted read-only into containers).
 
 ## Key Design Patterns
 
 ### Message Flow
-1. API server publishes message to RabbitMQ
-2. MainServerConsumer subscribes and consumes message
-3. Consumer validates, performs business logic with Redis
-4. Consumer stores result in Redis with a known key
-5. MainServer polls Redis for new messages
-6. MainServer broadcasts to all connected TCP clients via NetworkServer
+```
+Client HTTP POST → RestAPI → RabbitMQ → MainServerConsumer
+                                         ↓ validate + business logic
+                                      Redis (cache) + PostgreSQL (persist via DBWorker)
+                                         ↓
+                                      MainServer (polls Redis) → TCP broadcast to clients
+```
+
+### RestAPI Layered Architecture
+`cmd/server/main.go` → `internal/handlers/` → `internal/service/` → `internal/repository/`
+
+Handlers: `message_handler.go` (basic RabbitMQ publish), `message_handler_extended.go` (DB-backed CRUD), `user_handler.go`, `system_handler.go`. Middleware: auth (JWT), logger, metrics (Prometheus), rate limiting (10 req/s, burst 20). Extended message and user endpoints are conditionally registered only when PostgreSQL is available. Infrastructure services (RabbitMQ, Redis, PostgreSQL) are initialized in `internal/services/`.
 
 ### Callback-Based Message Handling
-Both server and client components use callback maps defined in `ModuleHeader.hpp`:
-- `server_message_execute_callback`: `(const std::string& message) -> std::tuple<bool, std::optional<std::string>>`
-- `client_message_parsing_callback`: `(const std::string& id, sub_id, command, message) -> std::tuple<bool, std::optional<std::string>>`
+Message handlers are registered in `std::map<string, callback>` where each command string maps to a handler function. `CommonModule/ModuleHeader.hpp` defines 8 callback types in two families:
+- **Server-side**: `server_message_execute_callback`, `server_message_parsing_callback`, `server_combine_message_callback`, `server_combine_message_parsing_callback`
+- **Client-side**: `client_message_execute_callback`, `client_message_parsing_callback`, `client_combine_message_execute_callback`, `client_combine_message_parsing_callback`
 
-Message handlers are registered in a `std::map` where the key is the message command string, and the value is the callback function.
-
-### Redis Usage
-- **User Status Cache**: `redis_db_user_status_index` - stores online/offline status
-- **Global Messages**: `redis_db_global_message_index` - used for broadcasting
-- **TTL**: Configurable via `redis_ttl_sec` for automatic cache expiration
-
-### Thread Pool
-Each component creates a thread pool with three priority queues:
-- High priority: Critical tasks (connection handling)
-- Normal priority: Standard message processing
-- Low priority: Background jobs (periodic DB sync)
-
-## Running Tests
-
-The project includes Google Test (gtest) for unit testing. Tests are typically located in subdirectories or the `.cpp_tool_kit` submodule.
-
-```bash
-# Build with tests enabled
-cd build
-cmake --build . --target all
-
-# Run tests (if test executables are built)
-ctest --output-on-failure
-```
-
-## Common Development Scenarios
+"Combine" variants accept a `std::vector<uint8_t>` for binary data. All return `std::tuple<bool, std::optional<std::string>>`.
 
 ### Adding a New Message Type
-1. Define the message structure in JSON format
-2. Add callback handler in appropriate `*MessageParsing.cpp` and `*MessageExecute.cpp` in `CommonModule/`
-3. Register the callback in the server or client's message map with a unique command key
-4. Update the `Configurations` class if new configuration parameters are needed
+1. Add callback handler in `CommonModule/*MessageParsing.cpp` and `*MessageExecute.cpp`
+2. Register in the component's callback map with a unique command key
+3. Update `Configurations` class if new config parameters are needed
 
-### Working with Redis
-- Use `RedisClient` from `.cpp_tool_kit/Redis/`
-- Each component can have multiple Redis client instances for different DB indices
-- Always check `use_redis()` configuration before Redis operations
-- Use `redis_ttl_sec()` for setting expiration times
-
-### Modifying Network Behavior
-- Server-side: Modify `MainServer::received_connection()` and `MainServer::received_message()`
-- Client-side: Modify `UserClient::received_connection()` and `UserClient::received_message()`
-- Network layer is abstracted in `NetworkServer` and `NetworkClient` from cpp_tool_kit
-
-### Adding RabbitMQ Consumers
-- Extend `MainServerConsumer` or create a new consumer component
-- Use `WorkQueueConsume` from `.cpp_tool_kit/RabbitMQ/`
-- Define queue name in configuration JSON
-- Implement consume callback to handle incoming AMQP messages
-
-## Debugging Tips
-
-### Logging
-All components use `Logger` from `.cpp_tool_kit/Utilities/`:
-```cpp
-Logger::handle().write(LogTypes::Information, "Message");
-Logger::handle().write(LogTypes::Error, "Error message");
-```
-
-Log files are written to the path specified by `log_root_path()` in configurations.
-
-Enable console and file logging via:
-- `write_console()`: Set log level for console output
-- `write_file()`: Set log level for file output
-- `write_interval()`: Milliseconds between log flushes
-
-### Docker Debugging
-```bash
-# Enter running container
-docker exec -it mainserver /bin/bash
-
-# Check if services are reachable
-# Inside container:
-nc -zv rabbitmq 5672
-nc -zv redis 6379
-```
+### Thread Pool
+Three priority queues per component: high (connection handling), normal (message processing), low (background DB sync). Configured via `high_priority_count`, `normal_priority_count`, `low_priority_count` in JSON config.
 
 ## Project Conventions
 
-- **Return Types**: Most functions return `std::tuple<bool, std::optional<std::string>>` where the bool indicates success, and the optional string contains an error message on failure.
-- **C++ Standard**: C++17 minimum, C++20 enabled (CMAKE_CXX_STANDARD 20)
-- **Naming**: Snake_case for variables/functions, PascalCase for classes
+- **C++ Standard**: C++23 (`CMAKE_CXX_STANDARD 23`), CMake 3.18+
+- **Go**: 1.23+ for RestAPI
+- **Formatting**: `.clang-format` in `.cpp_tool_kit/` — GNU-based, tabs, 4-space width, 170 column limit
+- **Naming**: PascalCase for classes/files, snake_case for functions/variables, `member_` suffix for class members
+- **Return Types**: `std::tuple<bool, std::optional<std::string>>` — bool for success, optional string for error message
 - **Error Handling**: No exceptions in network/async code paths; use return tuples
-- **Thread Safety**: Use `std::mutex` for shared state (see `MainServer::mutex_`, `UserClient::mutex_`)
+- **Thread Safety**: `std::mutex` for shared state (`MainServer::mutex_`, `UserClient::mutex_`)
+- **Dependencies**: vcpkg (`~/vcpkg/scripts/buildsystems/vcpkg.cmake`). Key: boost-asio, boost-json, librabbitmq, redis-plus-plus, libpq, cryptopp, gtest, lz4
+- **Submodule**: `git submodule update --init --recursive` for `.cpp_tool_kit/`
